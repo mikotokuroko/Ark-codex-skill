@@ -1,50 +1,74 @@
 ---
 name: ark-codex-skill
-description: Create or extend transparent desktop pets for Arknights operators using PRTS model exports. Use when the user asks to make a deskpet from an Arknights operator, download operator model/WebM animations, add an operator to the deskpet library, or switch the deskpet character.
+description: Create transparent Arknights desktop pets from PRTS base-animation exports, install them into Ark Codex Deskpet on macOS, or scaffold the original Windows app. Use for operator export, WebM-to-PNG conversion, pet validation, library installation, and pet switching.
 ---
 
 # Arknights Deskpet
 
-Build a transparent Codex deskpet from PRTS operator models and add it to a reusable deskpet library.
+Build a transparent Codex deskpet from PRTS operator models while preserving the
+cross-platform `manifest.json` schema.
 
-## Workflow
+## Choose a Platform
 
-1. Confirm operator name and optional skin. If no skin is given, use the default (默认).
-2. Resolve the operator page title on PRTS, then export base (基建) WebM animations: `Default`, `Interact`, `Move`, `Relax`, `Sit`, `Sleep`.
-3. Process the WebM files into 1000x1000 transparent PNG frames at 20fps and write `pets/<operator>/manifest.json`.
-4. Add the pet to the deskpet library and launch it. The app supports right-click switching through the `桌宠库` menu.
+- On macOS 13+ Apple silicon, use the installed `Ark Codex Deskpet.app` and the
+  macOS workflow below. Store generated pets only in Application Support.
+- On Windows, keep using the original `assets/deskpet-app` scaffold and Windows
+  workflow. Do not copy macOS runtime paths or launchd behavior into it.
 
-## Quick Start on a Fresh Machine
+## Pet-Generation Workflow
 
-The deskpet is a Windows Python app. Python 3.10+ and network access to `prts.wiki` are required. Do not use a global environment; always create a project-local `.venv`.
+1. Confirm the operator name and optional skin. Use `默认` when no skin is given.
+2. Export the PRTS base animations `Default`, `Interact`, `Move`, `Relax`, `Sit`,
+   and `Sleep` with `scripts/prts_export.py`.
+3. Convert usable WebM files to 1000×1000 transparent PNG frames at 20 fps with
+   `scripts/process_webm.py`. A broken tiny `Default` export may remain in the
+   work directory; it is not mapped to a runtime state.
+4. Validate the completed pet. It must contain `idle`, `interact`, `move`, `sit`,
+   and `sleep`; every `count` entry must reference an intact PNG frame.
+5. On macOS, install through `scripts/install_pet_macos.py`. It atomically replaces
+   only the same-named user pet, excludes raw WebM files, and sends
+   `refresh-library` to a running app.
+
+If PRTS viewer controls change, read `references/prts-ui.md` before updating the
+selectors in `scripts/prts_export.py`.
+
+## macOS Commands
+
+Use the repository-local `.venv-macos` created by `scripts/install_macos.sh`.
+System Chrome is preferred at either supported application path; otherwise
+Playwright Chromium is used from the local development environment and is never
+bundled into the desktop app.
 
 ```bash
-# 1. Scaffold a new deskpet project and its venv
-python scripts/scaffold_deskpet.py --target <project-dir> --pet "<operator>"
-python scripts/setup_env.py <project-dir>
+.venv-macos/bin/python ark-codex-skill/scripts/prts_export.py \
+  "<operator>" --out work/webm
 
-# 2. Export WebM from PRTS (default skin unless --skin is given)
-python scripts/prts_export.py "<operator>" [--skin "<skin>"] --out <project-dir>/work/webm
+.venv-macos/bin/python ark-codex-skill/scripts/process_webm.py \
+  --src work/webm --name "<operator>" --out "work/pets/<operator>"
 
-# 3. Convert WebM to transparent frames and add to the pet library
-python scripts/process_webm.py --src <project-dir>/work/webm --name "<operator>" --out <project-dir>/pets/<operator>
-
-# 4. Launch
-<project-dir>/启动桌宠.bat
+.venv-macos/bin/python ark-codex-skill/scripts/install_pet_macos.py \
+  "work/pets/<operator>"
 ```
 
-## Scripts
+User pets are installed in:
 
-- `scripts/scaffold_deskpet.py` copies the app template into a project and writes an initial `settings.json`.
-- `scripts/setup_env.py` creates `.venv`, installs `PySide6` and `playwright`, and optionally installs Playwright Chromium.
-- `scripts/prts_export.py` automates the PRTS model viewer: loads the model, selects skin/model group/animation, and downloads WebM files.
-- `scripts/process_webm.py` decodes WebM in Chromium, extracts transparent PNG frames, computes bounding boxes, and writes the pet manifest.
-- `scripts/create_shortcuts.py` creates 打开桌宠 shortcuts on the Desktop and in the Start Menu.
+```text
+~/Library/Application Support/Ark Codex Deskpet/Pets/
+```
 
-## Notes
+User pets override a bundled pet with the same Unicode name. The bundled default
+pet remains read-only inside the app.
 
-- The PRTS `Default` WebM export is often a broken 110-byte file. Keep it in `webm/` for reference, but do not map it to a state.
-- If PRTS changes its viewer DOM, update `references/prts-ui.md` and the selectors inside `scripts/prts_export.py`.
-- The generated app remembers position, size, and speed per pet, supports a mini mode, and can auto-hide in fullscreen.
-- A lightweight watcher spawns a separate tray process while ChatGPT/Codex runs. The tray offers `显示桌宠`, `隐藏桌宠` (closes the pet), `开机自启动`, and `退出` (closes pet, tray, and watcher). The tray disappears when the app closes.
-- The app template ships with 予愿安洁莉娜 as the initial pet, so a fresh project can launch immediately.
+## Windows Workflow
+
+The original Windows template remains available unchanged under
+`assets/deskpet-app`:
+
+```bash
+python scripts/scaffold_deskpet.py --target <project-dir> --pet "<operator>"
+python scripts/setup_env.py <project-dir>
+python scripts/prts_export.py "<operator>" --out <project-dir>/work/webm
+python scripts/process_webm.py --src <project-dir>/work/webm \
+  --name "<operator>" --out <project-dir>/pets/<operator>
+<project-dir>/启动桌宠.bat
+```
