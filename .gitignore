@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
 .venv/
+.venv-macos/
+.pyinstaller/
+.playwright-browsers/
+.pytest_cache/
+build/
+dist/
 pets/
 !ark-codex-skill/assets/deskpet-app/pets/
 !ark-codex-skill/assets/deskpet-app/pets/**
