@@ -7,6 +7,7 @@ import sys
 import urllib.parse
 
 try:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
     from playwright.sync_api import sync_playwright
 except ImportError:
     sys.exit("playwright is required: run 'pip install playwright' first")
@@ -35,10 +36,8 @@ def find_chrome():
 
 def select_option(page, select, text):
     select.click()
-    page.wait_for_timeout(500)
     option = page.locator(".n-base-select-option", has_text=text).first
-    if option.count() == 0:
-        raise RuntimeError(f"option not found: {text}")
+    option.wait_for(state="visible", timeout=120000)
     option.click()
     page.wait_for_timeout(1200)
 
@@ -56,29 +55,28 @@ def find_download_button(page):
 
 def open_operator_page(page, operator):
     url = "https://prts.wiki/w/" + urllib.parse.quote(operator)
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    page.wait_for_timeout(2500)
-    if page.locator("button", has_text=LOAD_BTN).count() == 0:
+    page.goto(url, wait_until="commit", timeout=180000)
+    load_btn = page.locator("button", has_text=LOAD_BTN).first
+    try:
+        load_btn.wait_for(state="visible", timeout=120000)
+    except PlaywrightTimeoutError:
         search_url = (
             "https://prts.wiki/index.php?search="
             + urllib.parse.quote(operator)
             + "&fulltext=1"
         )
-        page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-        page.wait_for_timeout(2500)
+        page.goto(search_url, wait_until="commit", timeout=180000)
         links = page.locator(".mw-search-result a[href^='/w/']")
-        if links.count() == 0:
-            raise RuntimeError(f"operator not found on PRTS: {operator}")
+        links.first.wait_for(state="visible", timeout=120000)
         href = links.first.get_attribute("href")
         title = urllib.parse.unquote(href.split("/w/", 1)[1])
         page.goto(
             "https://prts.wiki/w/" + urllib.parse.quote(title),
-            wait_until="domcontentloaded",
-            timeout=30000,
+            wait_until="commit",
+            timeout=180000,
         )
-        page.wait_for_timeout(2500)
-    if page.locator("button", has_text=LOAD_BTN).count() == 0:
-        raise RuntimeError(f"model viewer not found for operator: {operator}")
+        load_btn = page.locator("button", has_text=LOAD_BTN).first
+        load_btn.wait_for(state="visible", timeout=120000)
 
 
 def run_export(operator, skin, out_dir):
@@ -104,7 +102,9 @@ def run_export(operator, skin, out_dir):
             load_btn = page.locator("button", has_text=LOAD_BTN).first
             load_btn.scroll_into_view_if_needed()
             load_btn.click()
-            page.wait_for_timeout(5000)
+            page.locator(".n-select").nth(2).wait_for(
+                state="visible", timeout=120000
+            )
 
             skin_select = page.locator(".n-select").nth(0)
             select_option(page, skin_select, skin or "\u9ed8\u8ba4")
@@ -117,10 +117,10 @@ def run_export(operator, skin, out_dir):
                 select_option(page, anim_select, anim)
                 page.wait_for_timeout(2000)
                 download = find_download_button(page)
-                with page.expect_download(timeout=120000) as info:
+                with page.expect_download(timeout=300000) as info:
                     download.click()
                 dl = info.value
-                ext = os.path.splitext(dl.suggested_filename())[1] or ".webm"
+                ext = os.path.splitext(dl.suggested_filename)[1] or ".webm"
                 out_path = os.path.join(
                     out_dir, f"{operator}-{skin_label}-基建-{anim}-x1{ext}"
                 )

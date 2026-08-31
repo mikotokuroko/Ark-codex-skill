@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ctypes import c_void_p
 import logging
 from logging.handlers import RotatingFileHandler
 import os
@@ -288,6 +289,15 @@ class PetWindow(QWidget):
     def settings(self) -> dict[str, Any]:
         """Returns controller-owned settings."""
         return self.controller.settings
+
+    def showEvent(self, event: object) -> None:
+        """Keeps the pet above windows from other macOS applications."""
+        super().showEvent(event)
+        import AppKit
+        import objc
+
+        native_view = objc.objc_object(c_void_p=int(self.winId()))
+        native_view.window().setLevel_(AppKit.NSFloatingWindowLevel)
 
     @property
     def show_status(self) -> bool:
