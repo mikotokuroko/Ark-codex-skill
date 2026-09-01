@@ -17,12 +17,12 @@ from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QColor,
-    QFont,
     QFontMetrics,
     QGuiApplication,
     QIcon,
     QImage,
     QPainter,
+    QPalette,
     QPixmap,
 )
 from PySide6.QtWidgets import (
@@ -440,6 +440,9 @@ class PetWindow(QWidget):
         bbox = self.manifest["states"][self.state]["bbox"]
         image = self.current_image()
         painter = QPainter(self)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.fillRect(self.rect(), Qt.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         status_height = STATUS_HEIGHT if self.show_status else 0
         if not image.isNull():
@@ -462,21 +465,17 @@ class PetWindow(QWidget):
                 ),
             )
             bar = QRectF(6, 4, bar_width, STATUS_HEIGHT - 8)
-            color = (
-                QColor(30, 120, 70, 190)
-                if self.status_active
-                else QColor(25, 25, 25, 170)
-            )
-            painter.setBrush(color)
-            painter.setPen(Qt.NoPen)
+            palette = QApplication.palette()
+            painter.setBrush(palette.color(QPalette.Window))
+            painter.setPen(palette.color(QPalette.Mid))
             painter.drawRoundedRect(bar, 8, 8)
-            font = QFont()
+            font = QApplication.font()
             font.setPixelSize(int(self.settings.get("subtitle_size", 19)))
             painter.setFont(font)
             text = QFontMetrics(font).elidedText(
                 self.status_text, Qt.ElideRight, int(bar.width() - 16)
             )
-            painter.setPen(QColor(255, 255, 255))
+            painter.setPen(palette.color(QPalette.WindowText))
             painter.drawText(
                 bar.adjusted(8, 0, -8, 0),
                 Qt.AlignVCenter | Qt.AlignLeft,
