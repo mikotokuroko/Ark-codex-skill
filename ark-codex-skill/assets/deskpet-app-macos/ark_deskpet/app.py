@@ -102,6 +102,24 @@ SUBTITLE_LEVELS = {
         "show_progress": True,
     },
 }
+CAPTION_TEXT = {
+    "en": {
+        "idle": "Codex Idle",
+        "running": "Codex Running",
+        "waiting": "Waiting for Input",
+        "error": "Codex Error",
+        "elapsed": "Running {value}",
+        "model": "Model {value}",
+    },
+    "zh-Hans": {
+        "idle": "Codex 待机",
+        "running": "Codex 运行中",
+        "waiting": "等待输入",
+        "error": "Codex 错误",
+        "elapsed": "已运行 {value}",
+        "model": "模型 {value}",
+    },
+}
 
 
 def configure_logging() -> None:
@@ -257,7 +275,7 @@ class PetWindow(QWidget):
         self.press_time = 0.0
         self.pre_drag_state = "idle"
         self.pre_drag_hold = False
-        self.status_text = "Codex 待机"
+        self.status_text = CAPTION_TEXT[self.language]["idle"]
         self.status_active = False
 
         self.animation_timer = QTimer(self)
@@ -304,6 +322,12 @@ class PetWindow(QWidget):
     def show_status(self) -> bool:
         """Returns whether the Codex status strip is visible."""
         return not bool(self.settings.get("mini_mode"))
+
+    @property
+    def language(self) -> str:
+        """Returns the selected caption language."""
+        value = self.settings.get("language", "en")
+        return value if value in CAPTION_TEXT else "en"
 
     def tick_ms(self) -> int:
         """Returns the animation interval after speed scaling."""
@@ -644,10 +668,15 @@ class PetWindow(QWidget):
         )
         save_settings(settings_path(), self.settings)
 
-    @staticmethod
-    def _format_elapsed(seconds: int) -> str:
+    def _format_elapsed(self, seconds: int) -> str:
         minutes, second = divmod(int(seconds), 60)
         hours, minutes = divmod(minutes, 60)
+        if self.language == "en":
+            if hours:
+                return f"{hours}h {minutes}m"
+            if minutes:
+                return f"{minutes}m {second}s"
+            return f"{second}s"
         if hours:
             return f"{hours}小时{minutes}分"
         if minutes:
@@ -674,19 +703,31 @@ class PetWindow(QWidget):
     def refresh_status(self) -> None:
         """Reads recent Codex status without writing to the sessions directory."""
         status = get_codex_status()
-        self.status_active = bool(status.get("active"))
+        state = status.get("state", "idle")
+        if state not in ("idle", "running", "waiting", "error"):
+            state = "idle"
+        self.status_active = state == "running"
+        text = CAPTION_TEXT[self.language]
         level = SUBTITLE_LEVELS.get(
             self.settings.get("subtitle_length"), SUBTITLE_LEVELS["medium"]
         )
-        parts = ["Codex 运行中" if self.status_active else "Codex 待机"]
+        parts = [text[state]]
         if self.status_active and status.get("elapsed") is not None:
-            parts.append(f"已运行 {self._format_elapsed(status['elapsed'])}")
+            parts.append(
+                text["elapsed"].format(
+                    value=self._format_elapsed(status["elapsed"])
+                )
+            )
         if self.status_active and status.get("tokens") is not None:
             parts.append(f"Token {self._format_tokens(status['tokens'])}")
         if status.get("task"):
             parts.append(self._cut(status["task"], level["task_limit"]))
         if level["show_model"] and status.get("model"):
-            parts.append(f"模型 {self._cut(status['model'], 24)}")
+            parts.append(
+                text["model"].format(
+                    value=self._cut(status["model"], 24)
+                )
+            )
         if level["show_progress"] and status.get("progress"):
             parts.append(self._cut(status["progress"], 80))
         self.status_text = " · ".join(parts)
@@ -749,6 +790,17 @@ class DeskpetController:
                 lambda checked=False, name=name: self.select_pet(name)
             )
             group.addAction(action)
+        language_menu = menu.addMenu("Language")
+        language_group = QActionGroup(language_menu)
+        language_group.setExclusive(True)
+        for code, label in (("en", "English"), ("zh-Hans", "简体中文")):
+            action = language_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(self.window.language == code)
+            action.triggered.connect(
+                lambda checked=False, code=code: self.set_language(code)
+            )
+            language_group.addAction(action)
         menu.addAction("设置…", self.open_settings)
         menu.addSeparator()
         autostart = menu.addAction("随 ChatGPT/Codex 启动")
@@ -786,6 +838,15 @@ class DeskpetController:
         except ManifestError as error:
             QMessageBox.warning(self.window, APP_NAME, str(error))
             return
+        self._build_tray_menu()
+
+    def set_language(self, language: str) -> None:
+        """Changes the caption language and persists the selection."""
+        if language not in CAPTION_TEXT:
+            return
+        self.settings["language"] = language
+        save_settings(settings_path(), self.settings)
+        self.window.refresh_status()
         self._build_tray_menu()
 
     def watcher_executable(self) -> Path:

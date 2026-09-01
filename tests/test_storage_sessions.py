@@ -24,6 +24,7 @@ def test_settings_defaults_migration_and_unknown_values(tmp_path: Path) -> None:
     )
     settings = load_settings(path)
     assert settings["version"] == SETTINGS_VERSION
+    assert settings["language"] == "en"
     assert settings["pet"] == "旧角色"
     assert settings["pet_states"] == {}
     assert settings["future"] == 7
@@ -93,6 +94,7 @@ def test_codex_session_parsing(tmp_path: Path) -> None:
     os.utime(session, (100, 100))
     status = parse_session(session, now=105)
     assert status["active"]
+    assert status["state"] == "running"
     assert status["task"] == "制作一个 macOS 桌宠"
     assert status["tokens"] == 1234
     assert status["elapsed"] == 15
@@ -101,4 +103,73 @@ def test_codex_session_parsing(tmp_path: Path) -> None:
 
 
 def test_missing_sessions_are_idle(tmp_path: Path) -> None:
-    assert get_codex_status(tmp_path)["active"] is False
+    status = get_codex_status(tmp_path)
+    assert status["active"] is False
+    assert status["state"] == "idle"
+
+
+def test_completed_session_waits_for_input(tmp_path: Path) -> None:
+    session = tmp_path / "rollout-test.jsonl"
+    session.write_text(
+        "\n".join(
+            json.dumps({"payload": payload})
+            for payload in (
+                {"type": "task_started", "started_at": 90},
+                {"type": "task_complete", "completed_at": 100},
+            )
+        ),
+        encoding="utf-8",
+    )
+    status = parse_session(session, now=105)
+    assert status["active"] is False
+    assert status["state"] == "waiting"
+
+
+def test_failed_session_reports_error(tmp_path: Path) -> None:
+    session = tmp_path / "rollout-test.jsonl"
+    session.write_text(
+        json.dumps(
+            {"payload": {"type": "task_failed", "message": "Network lost"}}
+        ),
+        encoding="utf-8",
+    )
+    status = parse_session(session, now=105)
+    assert status["state"] == "error"
+    assert status["progress"] == "Network lost"
+
+
+def test_recent_long_session_tail_still_reports_running(tmp_path: Path) -> None:
+    session = tmp_path / "rollout-test.jsonl"
+    session.write_text(
+        json.dumps({"payload": {"type": "token_count"}}),
+        encoding="utf-8",
+    )
+    os.utime(session, (100, 100))
+    status = parse_session(session, now=105)
+    assert status["active"] is True
+    assert status["state"] == "running"
+
+
+def test_internal_review_session_is_not_shown(tmp_path: Path) -> None:
+    user_session = tmp_path / "rollout-user.jsonl"
+    user_session.write_text(
+        json.dumps({"payload": {"type": "task_complete"}}),
+        encoding="utf-8",
+    )
+    review_session = tmp_path / "rollout-review.jsonl"
+    review_session.write_text(
+        json.dumps(
+            {
+                "payload": {
+                    "type": "task_complete",
+                    "model": "codex-auto-review",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(user_session, (100, 100))
+    os.utime(review_session, (101, 101))
+    status = get_codex_status(tmp_path, now=105)
+    assert status["state"] == "waiting"
+    assert status["model"] is None

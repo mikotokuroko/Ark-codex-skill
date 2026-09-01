@@ -11,6 +11,7 @@ SETTINGS_VERSION = 2
 
 DEFAULT_SETTINGS = {
     "version": SETTINGS_VERSION,
+    "language": "en",
     "speed": 1.0,
     "subtitle_length": "medium",
     "subtitle_size": 19,

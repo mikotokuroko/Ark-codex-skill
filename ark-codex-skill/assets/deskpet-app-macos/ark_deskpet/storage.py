@@ -45,6 +45,8 @@ def migrate_settings(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return settings
     settings.update(raw)
+    if settings.get("language") not in ("en", "zh-Hans"):
+        settings["language"] = "en"
     if not isinstance(settings.get("pet_states"), dict):
         settings["pet_states"] = {}
     legacy_pet = raw.get("active_pet")

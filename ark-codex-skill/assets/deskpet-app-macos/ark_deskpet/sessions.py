@@ -50,6 +50,7 @@ def _empty_status() -> dict[str, Any]:
     """Returns the status shown when no Codex session exists."""
     return {
         "active": False,
+        "state": "idle",
         "task": None,
         "model": None,
         "progress": None,
@@ -65,6 +66,7 @@ def parse_session(path: Path, now: float | None = None) -> dict[str, Any]:
     status = _empty_status()
     started_at = None
     last_finished = None
+    saw_lifecycle = False
     try:
         modified = path.stat().st_mtime
         lines = _tail(path).splitlines()
@@ -80,6 +82,8 @@ def parse_session(path: Path, now: float | None = None) -> dict[str, Any]:
             continue
         payload_type = payload.get("type")
         if payload_type == "task_started":
+            saw_lifecycle = True
+            status["state"] = "running"
             value = payload.get("started_at")
             if isinstance(value, (int, float)):
                 started_at = float(value)
@@ -89,10 +93,27 @@ def parse_session(path: Path, now: float | None = None) -> dict[str, Any]:
             if isinstance(value, (int, float)):
                 status["tokens"] = int(value)
         elif payload_type == "task_complete":
+            saw_lifecycle = True
+            status["state"] = "waiting"
             value = payload.get("completed_at")
             if isinstance(value, (int, float)):
                 last_finished = float(value)
             message = payload.get("last_agent_message")
+            if isinstance(message, str) and message.strip():
+                status["progress"] = _clean(message)
+        elif payload_type == "turn_aborted":
+            saw_lifecycle = True
+            reason = str(payload.get("reason", "")).lower()
+            if reason in ("interrupted", "cancelled", "canceled"):
+                status["state"] = "idle"
+            else:
+                status["state"] = "error"
+                if reason:
+                    status["progress"] = _clean(reason)
+        elif payload_type in ("error", "task_failed", "fatal_error"):
+            saw_lifecycle = True
+            status["state"] = "error"
+            message = payload.get("message") or payload.get("error")
             if isinstance(message, str) and message.strip():
                 status["progress"] = _clean(message)
         if payload_type in ("user_message", "message") and payload.get(
@@ -119,7 +140,9 @@ def parse_session(path: Path, now: float | None = None) -> dict[str, Any]:
             status["model"] = str(thread_settings["model"])
         elif payload.get("model"):
             status["model"] = str(payload["model"])
-    status["active"] = current_time - modified < 8
+    if not saw_lifecycle and current_time - modified < 8:
+        status["state"] = "running"
+    status["active"] = status["state"] == "running"
     if status["active"] and started_at is not None:
         status["elapsed"] = max(0, int(current_time - started_at))
     if last_finished is not None:
@@ -136,7 +159,11 @@ def get_codex_status(
     root = sessions_root or Path.home() / ".codex" / "sessions"
     try:
         files = list(root.glob("**/rollout-*.jsonl"))
-        latest = max(files, key=lambda item: item.stat().st_mtime)
-    except (OSError, ValueError):
+        files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    except OSError:
         return _empty_status()
-    return parse_session(latest, now=now)
+    for path in files:
+        status = parse_session(path, now=now)
+        if status.get("model") != "codex-auto-review":
+            return status
+    return _empty_status()
