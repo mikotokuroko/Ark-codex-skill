@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -67,8 +68,44 @@ class StubTray:
         self.menu = menu
 
 
+ANIMATION_LABELS = (
+    "放松/relax",
+    "互动/interact",
+    "移动/move",
+    "坐下/sit",
+    "睡眠/sleep",
+    "特殊/special",
+)
+
+
+def add_special_state(pet: Path) -> None:
+    """Adds one valid optional Special frame to a fixture pet."""
+    manifest_path = pet / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    frame_dir = pet / "frames" / "special"
+    frame_dir.mkdir()
+    frame = pet / "frames" / "idle" / "frame_0000.png"
+    (frame_dir / "frame_0000.png").write_bytes(frame.read_bytes())
+    manifest["states"]["special"] = {
+        "duration": 50,
+        "count": 1,
+        "bbox": [0, 0, 0, 0],
+        "source": "special.webm",
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def animation_actions(menu: QMenu) -> list:
+    """Returns direct menu actions that expose pet animations."""
+    return [
+        action for action in menu.actions() if action.text() in ANIMATION_LABELS
+    ]
+
+
 def make_window(
-    make_pet, tmp_path: Path, qapp, monkeypatch
+    make_pet, tmp_path: Path, qapp, monkeypatch, include_special: bool = False
 ) -> tuple[StubController, PetWindow]:
     monkeypatch.setattr(
         app_module,
@@ -77,10 +114,110 @@ def make_window(
     )
     monkeypatch.setattr(app_module, "get_codex_status", lambda: {"state": "idle"})
     pet = make_pet(tmp_path)
+    if include_special:
+        add_special_state(pet)
     controller = StubController(pet)
     window = PetWindow(controller)
     controller.window = window
     return controller, window
+
+
+@pytest.mark.parametrize(
+    ("include_special", "expected_labels"),
+    [
+        (False, ANIMATION_LABELS[:5]),
+        (True, ANIMATION_LABELS),
+    ],
+)
+@pytest.mark.parametrize("language", ["en", "zh-Hans"])
+def test_context_animation_actions_follow_manifest_and_keep_bilingual_labels(
+    make_pet,
+    tmp_path: Path,
+    qapp,
+    monkeypatch,
+    include_special: bool,
+    expected_labels: tuple[str, ...],
+    language: str,
+) -> None:
+    controller, window = make_window(
+        make_pet,
+        tmp_path,
+        qapp,
+        monkeypatch,
+        include_special=include_special,
+    )
+    controller.settings["language"] = language
+
+    assert [
+        action.text() for action in animation_actions(window.build_context_menu())
+    ] == list(expected_labels)
+    window.deleteLater()
+    qapp.processEvents()
+
+
+def test_context_animation_actions_trigger_each_available_state(
+    make_pet, tmp_path: Path, qapp, monkeypatch
+) -> None:
+    controller, window = make_window(
+        make_pet,
+        tmp_path,
+        qapp,
+        monkeypatch,
+        include_special=True,
+    )
+    actions = animation_actions(window.build_context_menu())
+
+    for action, state in zip(
+        actions, ("idle", "interact", "move", "sit", "sleep", "special")
+    ):
+        action.trigger()
+        assert window.state == state
+        assert window.animation_policy.override_active is True
+
+    window.deleteLater()
+    qapp.processEvents()
+
+
+@pytest.mark.parametrize("include_special", [False, True])
+def test_tray_animation_submenu_shares_manifest_actions(
+    make_pet, tmp_path: Path, qapp, monkeypatch, include_special: bool
+) -> None:
+    controller, window = make_window(
+        make_pet,
+        tmp_path,
+        qapp,
+        monkeypatch,
+        include_special=include_special,
+    )
+    controller_instance = DeskpetController.__new__(DeskpetController)
+    controller_instance.window = window
+    controller_instance.library = controller.library
+    controller_instance.settings = controller.settings
+    controller_instance.tray = StubTray()
+
+    controller_instance._build_tray_menu()
+    assert controller_instance.tray.menu is not None
+    animation_action = next(
+        action
+        for action in controller_instance.tray.menu.actions()
+        if action.text() == "动画/animations"
+    )
+    assert animation_action.menu() is not None
+    tray_actions = animation_actions(animation_action.menu())
+    expected_count = 6 if include_special else 5
+    assert [action.text() for action in tray_actions] == list(
+        ANIMATION_LABELS[:expected_count]
+    )
+    assert [action.text() for action in tray_actions] == [
+        action.text() for action in animation_actions(window.build_context_menu())
+    ]
+
+    tray_actions[-1].trigger()
+    expected_state = "special" if include_special else "sleep"
+    assert window.state == expected_state
+    assert window.animation_policy.override_active is True
+    window.deleteLater()
+    qapp.processEvents()
 
 
 def test_window_starts_relaxed_without_legacy_dwell_timers(

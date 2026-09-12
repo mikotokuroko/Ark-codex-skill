@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Show all available animations in both macOS menus using Chinese/English labels.
+  Include Special only for pets that provide it; menu actions respect manual
+  overrides and resume the current animation policy after one cycle.
+
 ## 0.2.0
 
 - Add a global saved “Follow Codex activity” toggle to both macOS menus.

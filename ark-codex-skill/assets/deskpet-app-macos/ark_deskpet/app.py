@@ -131,6 +131,15 @@ AUTO_ANIMATION_LABELS = {
     "zh-Hans": "跟随 Codex 活动",
 }
 
+ANIMATION_LABELS = (
+    ("idle", "放松/relax"),
+    ("interact", "互动/interact"),
+    ("move", "移动/move"),
+    ("sit", "坐下/sit"),
+    ("sleep", "睡眠/sleep"),
+    ("special", "特殊/special"),
+)
+
 
 def configure_logging() -> None:
     """Configures a rotating log in the user's Library directory."""
@@ -580,12 +589,22 @@ class PetWindow(QWidget):
         """Shows the pet context menu with a synchronized auto toggle."""
         self.build_context_menu().exec(event.globalPos())
 
+    def add_animation_actions(self, menu: QMenu) -> None:
+        """Adds bilingual actions for animations in the active manifest."""
+        states = self.manifest.get("states", {})
+        for state, label in ANIMATION_LABELS:
+            if state in states:
+                menu.addAction(
+                    label,
+                    lambda checked=False, state=state: self.play_one_shot(
+                        state
+                    ),
+                )
+
     def build_context_menu(self) -> QMenu:
         """Builds the pet context menu for display or UI smoke tests."""
         menu = QMenu(self)
-        menu.addAction("坐下", lambda: self.play_one_shot("sit"))
-        menu.addAction("放松", lambda: self.play_one_shot("idle"))
-        menu.addAction("睡觉", lambda: self.play_one_shot("sleep"))
+        self.add_animation_actions(menu)
         library = menu.addMenu("桌宠库")
         group = QActionGroup(library)
         group.setExclusive(True)
@@ -827,6 +846,8 @@ class DeskpetController:
                 lambda checked=False, name=name: self.select_pet(name)
             )
             group.addAction(action)
+        animation_menu = menu.addMenu("动画/animations")
+        self.window.add_animation_actions(animation_menu)
         language_menu = menu.addMenu("Language")
         language_group = QActionGroup(language_menu)
         language_group.setExclusive(True)
