@@ -1,0 +1,72 @@
+{
+  "fps": 20,
+  "size": 1000,
+  "states": {
+    "idle": {
+      "duration": 6000,
+      "count": 120,
+      "bbox": [
+        380,
+        546,
+        501,
+        758
+      ],
+      "source": "PRTS 德克萨斯 意志 基建 Relax"
+    },
+    "interact": {
+      "duration": 1700,
+      "count": 34,
+      "bbox": [
+        373,
+        545,
+        529,
+        758
+      ],
+      "source": "PRTS 德克萨斯 意志 基建 Interact"
+    },
+    "move": {
+      "duration": 1000,
+      "count": 20,
+      "bbox": [
+        372,
+        544,
+        504,
+        760
+      ],
+      "source": "PRTS 德克萨斯 意志 基建 Move"
+    },
+    "sit": {
+      "duration": 6000,
+      "count": 120,
+      "bbox": [
+        375,
+        610,
+        509,
+        813
+      ],
+      "source": "PRTS 德克萨斯 意志 基建 Sit"
+    },
+    "sleep": {
+      "duration": 4000,
+      "count": 80,
+      "bbox": [
+        326,
+        653,
+        538,
+        768
+      ],
+      "source": "PRTS 德克萨斯 意志 基建 Sleep"
+    },
+    "special": {
+      "duration": 12900,
+      "count": 258,
+      "bbox": [
+        75,
+        50,
+        900,
+        949
+      ],
+      "source": "PRTS 德克萨斯 意志 基建 Special"
+    }
+  }
+}

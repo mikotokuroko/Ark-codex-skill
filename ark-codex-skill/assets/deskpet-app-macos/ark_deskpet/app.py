@@ -7,7 +7,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
-import random
 import sys
 import time
 from typing import Any
@@ -42,7 +41,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .constants import APP_NAME, BUNDLE_ID, DEFAULT_PET
+from .animation_policy import AnimationPolicy, PolicyTransition
+from .constants import (
+    APP_NAME,
+    AUTO_ANIMATIONS_KEY,
+    BUNDLE_ID,
+    DEFAULT_PET,
+)
 from .display import Rect, recover_position
 from .fullscreen import FullscreenDetector
 from .ipc import CommandServer, send_command
@@ -119,6 +124,11 @@ CAPTION_TEXT = {
         "elapsed": "已运行 {value}",
         "model": "模型 {value}",
     },
+}
+
+AUTO_ANIMATION_LABELS = {
+    "en": "Follow Codex activity",
+    "zh-Hans": "跟随 Codex 活动",
 }
 
 
@@ -277,17 +287,10 @@ class PetWindow(QWidget):
         self.pre_drag_hold = False
         self.status_text = CAPTION_TEXT[self.language]["idle"]
         self.status_active = False
+        self.animation_policy = AnimationPolicy(clock=time.monotonic)
 
         self.animation_timer = QTimer(self)
         self.animation_timer.timeout.connect(self.next_frame)
-        self.sit_timer = QTimer(self)
-        self.sit_timer.setSingleShot(True)
-        self.sit_timer.timeout.connect(lambda: self.set_state("sit", True))
-        self.sleep_timer = QTimer(self)
-        self.sleep_timer.setSingleShot(True)
-        self.sleep_timer.timeout.connect(
-            lambda: self.set_state("sleep", True)
-        )
         self.status_timer = QTimer(self)
         self.status_timer.setInterval(2000)
         self.status_timer.timeout.connect(self.refresh_status)
@@ -302,6 +305,9 @@ class PetWindow(QWidget):
         self.scale = 1.0
         self.speed = 1.0
         self.load_pet(controller.active_pet_name, recover=True)
+        self.apply_auto_animations(
+            bool(self.settings.get(AUTO_ANIMATIONS_KEY, False))
+        )
         self.refresh_status()
 
     @property
@@ -346,6 +352,7 @@ class PetWindow(QWidget):
             self.save_pet_state()
         self.pet = entry
         self.manifest = manifest
+        self.animation_policy.set_available_states(manifest["states"])
         self.controller.active_pet_name = name
         self.settings["pet"] = name
         pet_state = self.settings.get("pet_states", {}).get(name, {})
@@ -360,7 +367,13 @@ class PetWindow(QWidget):
             pet_state.get("speed", self.settings.get("speed", 1.0))
         )
         self.cache.clear()
-        self.set_state("idle")
+        policy_state = getattr(self.animation_policy, "state", "idle")
+        if policy_state not in self.manifest["states"]:
+            policy_state = "idle"
+        self.set_state(
+            policy_state,
+            bool(getattr(self.animation_policy, "hold", False)),
+        )
         self.animation_timer.setInterval(self.tick_ms())
         self.animation_timer.start()
         if recover:
@@ -395,17 +408,26 @@ class PetWindow(QWidget):
         self.frame_index = 0
         self.cache.clear()
         self.apply_geometry()
-        self.schedule_idle()
         self.update()
 
-    def schedule_idle(self) -> None:
-        """Schedules automatic sitting and sleeping transitions."""
-        self.sit_timer.stop()
-        self.sleep_timer.stop()
-        if self.state == "sleep":
+    def _apply_policy_transition(
+        self, transition: PolicyTransition | None
+    ) -> None:
+        """Applies a state selected by the pure wall-clock policy."""
+        if transition is not None:
+            self.set_state(transition.state, transition.hold)
+
+    def apply_auto_animations(self, enabled: bool) -> None:
+        """Applies the persisted automatic-animation preference."""
+        transition = self.animation_policy.set_enabled(bool(enabled))
+        self._apply_policy_transition(transition)
+
+    def play_one_shot(self, state: str) -> None:
+        """Plays one complete manual animation and then resumes policy mode."""
+        if state not in self.manifest["states"]:
             return
-        self.sit_timer.start(40_000 + random.randint(0, 20_000))
-        self.sleep_timer.start(90_000)
+        transition = self.animation_policy.start_override(state)
+        self._apply_policy_transition(transition)
 
     def apply_geometry(self) -> None:
         """Crops the transparent window around the current animation bbox."""
@@ -450,10 +472,13 @@ class PetWindow(QWidget):
     def next_frame(self) -> None:
         """Advances the active animation at its configured frame rate."""
         count = int(self.manifest["states"][self.state]["count"])
-        if self.state in ("interact", "sit", "sleep"):
-            if not self.hold_state and self.frame_index >= count - 1:
-                if self.state != "sleep":
-                    self.set_state("idle")
+        if self.frame_index >= count - 1:
+            transition = self.animation_policy.on_animation_cycle_boundary()
+            if transition is not None:
+                self._apply_policy_transition(transition)
+                return
+            if self.state in ("interact", "sit", "sleep") and not self.hold_state:
+                self.set_state("idle", True)
                 return
         self.frame_index = (self.frame_index + 1) % count
         self.update()
@@ -526,9 +551,7 @@ class PetWindow(QWidget):
         delta = current - self.press_global
         if not self.dragging and delta.manhattanLength() > 6:
             self.dragging = True
-            self.sit_timer.stop()
-            self.sleep_timer.stop()
-            self.set_state("move")
+            self._apply_policy_transition(self.animation_policy.start_drag())
         if self.dragging and event.buttons() & Qt.LeftButton:
             self.move(self.press_window + delta)
 
@@ -543,15 +566,10 @@ class PetWindow(QWidget):
         self.press_window = None
         if self.dragging:
             self.dragging = False
-            target = (
-                self.pre_drag_state
-                if self.pre_drag_state in self.manifest["states"]
-                else "idle"
-            )
-            self.set_state(target, self.pre_drag_hold)
+            self._apply_policy_transition(self.animation_policy.release_drag())
             self.save_pet_state()
         elif elapsed < 0.5 and delta.manhattanLength() <= 6:
-            self.set_state("interact")
+            self.play_one_shot("interact")
 
     def mouseDoubleClickEvent(self, event: Any) -> None:
         """Toggles mini mode on a left-button double click."""
@@ -559,11 +577,15 @@ class PetWindow(QWidget):
             self.toggle_mini()
 
     def contextMenuEvent(self, event: Any) -> None:
-        """Shows the Chinese pet context menu."""
+        """Shows the pet context menu with a synchronized auto toggle."""
+        self.build_context_menu().exec(event.globalPos())
+
+    def build_context_menu(self) -> QMenu:
+        """Builds the pet context menu for display or UI smoke tests."""
         menu = QMenu(self)
-        menu.addAction("坐下", lambda: self.set_state("sit", True))
-        menu.addAction("放松", lambda: self.set_state("idle", True))
-        menu.addAction("睡觉", lambda: self.set_state("sleep", True))
+        menu.addAction("坐下", lambda: self.play_one_shot("sit"))
+        menu.addAction("放松", lambda: self.play_one_shot("idle"))
+        menu.addAction("睡觉", lambda: self.play_one_shot("sleep"))
         library = menu.addMenu("桌宠库")
         group = QActionGroup(library)
         group.setExclusive(True)
@@ -586,6 +608,16 @@ class PetWindow(QWidget):
             bool(self.settings.get("auto_hide_fullscreen"))
         )
         fullscreen.triggered.connect(self.toggle_fullscreen_auto_hide)
+        auto_animations = menu.addAction(
+            AUTO_ANIMATION_LABELS[self.language]
+        )
+        auto_animations.setCheckable(True)
+        auto_animations.setChecked(
+            bool(self.settings.get(AUTO_ANIMATIONS_KEY, False))
+        )
+        auto_animations.toggled.connect(
+            self.controller.set_auto_animations
+        )
         menu.addAction(
             "解锁拖动" if self.settings.get("locked", True) else "锁定拖动",
             self.toggle_lock,
@@ -596,7 +628,7 @@ class PetWindow(QWidget):
         menu.addSeparator()
         menu.addAction("隐藏桌宠", self.controller.hide_pet)
         menu.addAction("退出", self.controller.quit)
-        menu.exec(event.globalPos())
+        return menu
 
     def set_scale(self, scale: float) -> None:
         """Changes and persists the active pet scale."""
@@ -707,6 +739,11 @@ class PetWindow(QWidget):
         if state not in ("idle", "running", "waiting", "error"):
             state = "idle"
         self.status_active = state == "running"
+        self._apply_policy_transition(
+            self.animation_policy.set_mode(
+                "running" if self.status_active else "idle"
+            )
+        )
         text = CAPTION_TEXT[self.language]
         level = SUBTITLE_LEVELS.get(
             self.settings.get("subtitle_length"), SUBTITLE_LEVELS["medium"]
@@ -807,6 +844,14 @@ class DeskpetController:
         autostart.setCheckable(True)
         autostart.setChecked(launch_agent_enabled())
         autostart.toggled.connect(self.set_autostart)
+        auto_animations = menu.addAction(
+            AUTO_ANIMATION_LABELS[self.window.language]
+        )
+        auto_animations.setCheckable(True)
+        auto_animations.setChecked(
+            bool(self.settings.get(AUTO_ANIMATIONS_KEY, False))
+        )
+        auto_animations.toggled.connect(self.set_auto_animations)
         menu.addSeparator()
         menu.addAction("退出", self.quit)
         self.tray.setContextMenu(menu)
@@ -847,6 +892,14 @@ class DeskpetController:
         self.settings["language"] = language
         save_settings(settings_path(), self.settings)
         self.window.refresh_status()
+        self._build_tray_menu()
+
+    def set_auto_animations(self, enabled: bool) -> None:
+        """Persists and applies the synchronized automatic-animation toggle."""
+        value = bool(enabled)
+        self.settings[AUTO_ANIMATIONS_KEY] = value
+        save_settings(settings_path(), self.settings)
+        self.window.apply_auto_animations(value)
         self._build_tray_menu()
 
     def watcher_executable(self) -> Path:

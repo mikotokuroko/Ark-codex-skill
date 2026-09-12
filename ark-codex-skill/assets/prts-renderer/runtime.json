@@ -1,0 +1,14 @@
+{
+  "family": "3.8",
+  "entry": "SpineViewer.DRQRma0f.js",
+  "source": "https://static.prts.wiki/widgets/production/",
+  "sha256": {
+    "common.BUob73kO.js": "b6ee2da2289f44d450a13d59380c7973cfa1139f0c93af4ae69309db0538452a",
+    "defineProperty.BbfpZ9Tg.js": "c2ae68c1ad7462e777ccd4e1e3f84b3bc07ab81458f0dd0ea042a9e1b4d23afb",
+    "vendor.Bww58AyX.js": "ade8a41f79752b51033e17f100302796f84cc968a34bc9fb5e2065544e29f1cf",
+    "rolldown-runtime.Dd_uD5pT.js": "c5f0356f5d0918a3137e4e811fd18950efe8ac8f6bf84d1d4da7811c477a24d8",
+    "naive-ui.DfNq-SWu.js": "a6f033bfb719cb3c7d6b55178ea223d72b1c8ae511e5fbad6e6e6d436c67f5e0",
+    "SpineViewer.DRQRma0f.js": "55aff6377e1a5cbb3598b6a9fa475adc7ff1d2b3a68b677e8b292204e3adb4b0",
+    "modulepreload-polyfill.P2Xu9kJm.js": "418c206484b89b68ef5f067277831e583fc9193a62aadf4de269acaaeb12a85f"
+  }
+}

@@ -15,6 +15,13 @@ default_pet = (
     / "pets"
     / default_pet_name
 )
+additional_pet_data = []
+for pet in sorted((macos_root / "pets").glob("*")):
+    if pet.is_dir() and (pet / "manifest.json").is_file():
+        additional_pet_data.extend([
+            (str(pet / "manifest.json"), f"pets/{pet.name}"),
+            (str(pet / "frames"), f"pets/{pet.name}/frames"),
+        ])
 packaging = repository / "packaging"
 
 with (packaging / "Info.plist").open("rb") as plist_file:
@@ -34,7 +41,7 @@ app_analysis = Analysis(
             str(packaging / "com.astrariax.arkcodexdeskpet.watcher.plist"),
             "LaunchAgent",
         ),
-    ],
+    ] + additional_pet_data,
     hiddenimports=[
         "AppKit",
         "Foundation",

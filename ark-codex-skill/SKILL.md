@@ -18,19 +18,29 @@ cross-platform `manifest.json` schema.
 ## Pet-Generation Workflow
 
 1. Confirm the operator name and optional skin. Use `默认` when no skin is given.
-2. Export the PRTS base animations `Default`, `Interact`, `Move`, `Relax`, `Sit`,
-   and `Sleep` with `scripts/prts_export.py`.
-3. Convert usable WebM files to 1000×1000 transparent PNG frames at 20 fps with
-   `scripts/process_webm.py`. A broken tiny `Default` export may remain in the
-   work directory; it is not mapped to a runtime state.
+2. Run `scripts/export_pet.py` to discover and fetch the PRTS base model directly.
+   It owns the local server and browser; desktop browser control is unnecessary.
+   Export `Interact`, `Move`, `Relax`, `Sit`, and `Sleep`, plus `Special` whenever
+   advertised. An absent Special is valid; a failed advertised animation is not.
+3. Require the version check, animation inventory, visible test frame, and
+   deterministic pose check to pass before full rendering. Frames use exact
+   `frame_index / 20` timestamps and are 1000×1000 with transparency. Default
+   is diagnostic only and is not mapped to a runtime state.
 4. Validate the completed pet. It must contain `idle`, `interact`, `move`, `sit`,
-   and `sleep`; every `count` entry must reference an intact PNG frame.
+   and `sleep`, with optional `special`; every `count` entry must reference an
+   intact PNG frame. Inspect representative frames for appearance and clipping.
 5. On macOS, install through `scripts/install_pet_macos.py`. It atomically replaces
    only the same-named user pet, excludes raw WebM files, and sends
    `refresh-library` to a running app.
 
-If PRTS viewer controls change, read `references/prts-ui.md` before updating the
-selectors in `scripts/prts_export.py`.
+For failures, read `references/direct-export.md`. The tested local adapter supports
+Spine 3.8; another model version requires a matching adapter, never a guessed
+combination. Stage diagnostics identify the failed step before a retry. Transfer
+ownership explicitly when an export worker stalls, preserving its evidence.
+
+The browser UI exporter `scripts/prts_export.py` and `scripts/process_webm.py`
+remain an explicit fallback; read `references/prts-ui.md` before using it.
+Reuse download authorization already provided by the user.
 
 ## macOS Commands
 
@@ -40,14 +50,13 @@ Playwright Chromium is used from the local development environment and is never
 bundled into the desktop app.
 
 ```bash
-.venv-macos/bin/python ark-codex-skill/scripts/prts_export.py \
-  "<operator>" --out work/webm
-
-.venv-macos/bin/python ark-codex-skill/scripts/process_webm.py \
-  --src work/webm --name "<operator>" --out "work/pets/<operator>"
+.venv-macos/bin/python ark-codex-skill/scripts/export_pet.py \
+  "<operator>" --skin "默认" \
+  --out "$HOME/Library/Application Support/Ark Codex Deskpet/Exports/<unique-run>"
 
 .venv-macos/bin/python ark-codex-skill/scripts/install_pet_macos.py \
-  "work/pets/<operator>"
+  "$HOME/Library/Application Support/Ark Codex Deskpet/Exports/<unique-run>/pet" \
+  --name "<operator>"
 ```
 
 User pets are installed in:
@@ -58,6 +67,11 @@ User pets are installed in:
 
 User pets override a bundled pet with the same Unicode name. The bundled default
 pet remains read-only inside the app.
+
+The app's saved **Follow Codex activity** menu toggle is off by default. Enabled
+mode uses mostly Relax with occasional Interact/Sit/Sleep/Special, continuous Sleep
+after five inactive minutes, and Move/Interact while any monitored local task runs.
+Creating a pet does not change this setting.
 
 ## Windows Workflow
 

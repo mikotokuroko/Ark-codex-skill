@@ -1,0 +1,61 @@
+{
+  "fps": 20,
+  "size": 1000,
+  "states": {
+    "idle": {
+      "duration": 8000,
+      "count": 160,
+      "bbox": [
+        403,
+        237,
+        584,
+        634
+      ],
+      "source": "PRTS 结城理 默认 基建 Relax"
+    },
+    "interact": {
+      "duration": 6300,
+      "count": 126,
+      "bbox": [
+        408,
+        235,
+        591,
+        633
+      ],
+      "source": "PRTS 结城理 默认 基建 Interact"
+    },
+    "move": {
+      "duration": 8000,
+      "count": 160,
+      "bbox": [
+        408,
+        243,
+        592,
+        637
+      ],
+      "source": "PRTS 结城理 默认 基建 Move"
+    },
+    "sit": {
+      "duration": 8000,
+      "count": 160,
+      "bbox": [
+        426,
+        380,
+        628,
+        764
+      ],
+      "source": "PRTS 结城理 默认 基建 Sit"
+    },
+    "sleep": {
+      "duration": 4000,
+      "count": 80,
+      "bbox": [
+        307,
+        491,
+        696,
+        651
+      ],
+      "source": "PRTS 结城理 默认 基建 Sleep"
+    }
+  }
+}

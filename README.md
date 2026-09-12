@@ -37,7 +37,8 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 ## 功能特性
 
 * 透明、无边框、始终置顶的桌宠窗口，不显示普通 Dock 图标
-* 以 20 FPS 播放待机、互动、移动、坐下和睡眠动画
+* 以 20 FPS 播放待机、互动、移动、坐下、睡眠和可选 Special 动画
+* 可选“跟随 Codex 活动”：忙碌时移动与互动，空闲时以放松为主，五分钟后睡眠
 * 支持单击互动、拖动、缩放、锁定、迷你模式和全屏自动隐藏
 * 按角色保存位置、大小、动作倍速和选中状态
 * 支持 Unicode 角色名，以及内置和用户桌宠库合并
@@ -50,7 +51,16 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 * 使用 macOS 应用事件监听 ChatGPT/Codex，不持续轮询进程
 * 全屏检测不申请屏幕录制或辅助功能权限
 
-项目初始自带予愿安洁莉娜，安装后可以立即使用。
+macOS 应用内置予愿安洁莉娜、德克萨斯「意志」与结城理（默认服装），安装后可在桌宠库切换。
+
+| 桌宠 | 动画 | 来源 |
+|---|---|---|
+| 德克萨斯「意志」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/德克萨斯) |
+| 结城理（默认服装） | Relax、Interact、Move、Sit、Sleep（此模型无 Special） | [PRTS](https://prts.wiki/w/结城理) |
+
+新增素材位于 `ark-codex-skill/assets/deskpet-app-macos/pets/`，构建时自动打包。
+用户安装的同名桌宠仍优先于内置版本。
+
 
 ## macOS 环境要求
 
@@ -104,6 +114,23 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 * **点击菜单栏图标**：显示桌宠
 * **打开菜单栏菜单**：隐藏桌宠、切换角色、更改字幕语言、打开设置或退出
 
+菜单栏和桌宠右键菜单中的 **Follow Codex activity / 跟随 Codex 活动**
+控制自动动作，默认关闭；设置会保存并应用于所有角色。
+
+| 模式 | 动作 |
+| --- | --- |
+| 关闭 | 默认放松；点击、拖动和手动选择动作仍可使用，不会自动坐下或睡觉 |
+| 空闲不足五分钟 | 放松 45–90 秒，再完整播放一次互动、坐下、短暂睡眠或 Special（若有），然后返回放松 |
+| 连续空闲五分钟 | 当前动作周期结束后持续睡眠 |
+| Codex 正在运行任务 | 移动 10–20 秒，再完整播放一次互动，循环进行 |
+
+放松之间的动作概率为互动 50%、坐下 30%、睡眠 10%、Special 10%；
+角色没有 Special 时，其概率按比例分配给其他动作。
+任一本机受监控任务运行时，都使用运行模式；等待输入、错误和 Codex 关闭视为空闲。
+任务开始会立即唤醒睡眠，其他动作在当前周期结束后切换。
+手动操作会暂时接管动作，完成后重新计算空闲时间并恢复自动模式。
+动作播放倍速不改变上述等待时间。
+
 状态字幕默认使用英文，并根据 Codex 的任务事件显示：
 
 | 状态 | 英文字幕 | 含义 |
@@ -140,21 +167,19 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 ```
 
 不写皮肤时默认使用原皮。
-完整流程会导出 `Default / Interact / Move / Relax / Sit / Sleep`，
-跳过损坏的微小 WebM，并把五个可用状态安装到桌宠库。
+完整流程直接导出 `Interact / Move / Relax / Sit / Sleep`，存在 `Special` 时也会导出。
+先验证模型版本和测试帧，再生成固定时间戳的透明 PNG；任何必需或已发现动作失败都会报告。
 
 ### 在 macOS 手动运行生成流程
 
 ```bash
-.venv-macos/bin/python ark-codex-skill/scripts/prts_export.py \
-  "浊心斯卡蒂" --skin "升华" --out work/webm
-
-.venv-macos/bin/python ark-codex-skill/scripts/process_webm.py \
-  --src work/webm --name "浊心斯卡蒂" \
-  --out "work/pets/浊心斯卡蒂"
+.venv-macos/bin/python ark-codex-skill/scripts/export_pet.py \
+  "浊心斯卡蒂" --skin "升华" \
+  --out "$HOME/Library/Application Support/Ark Codex Deskpet/Exports/skadi-run"
 
 .venv-macos/bin/python ark-codex-skill/scripts/install_pet_macos.py \
-  "work/pets/浊心斯卡蒂"
+  "$HOME/Library/Application Support/Ark Codex Deskpet/Exports/skadi-run/pet" \
+  --name "浊心斯卡蒂"
 ```
 
 安装脚本会验证清单和每张 PNG，原子替换同名用户桌宠，
@@ -162,8 +187,9 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 不需要重新构建 `.app`。
 
 > [!TIP]
-> 如果 PRTS 的查看器控件发生变化，请先查看
-> `ark-codex-skill/references/prts-ui.md`，再更新导出脚本选择器。
+> 直接导出与版本兼容排查见 `ark-codex-skill/references/direct-export.md`。
+> PRTS 返回 HTTP 403 时会报告失败；已有下载素材可通过 `--source` 离线重现。
+> 浏览器查看器仅作为显式后备方案。
 
 ## macOS 数据存储
 
@@ -203,6 +229,8 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 用户命令通过用户缓存目录中的本地 socket 发送。
 状态条读取 Codex 会话的任务开始、完成、中止和失败事件，并忽略内部审批
 审查会话，避免把内部状态显示给用户。
+活动检测只监控当前 `com.openai.codex` 启动期间的本机任务；多个任务中任一运行
+即保持忙碌，长时间没有新日志不会让任务提前变为空闲。旧启动记录不会显示为当前任务。
 
 独立 watcher 使用 AppKit `NSWorkspace` 的应用启动和退出通知，识别：
 
@@ -255,7 +283,8 @@ QT_QPA_PLATFORM=offscreen .venv-macos/bin/pytest -q
 
 当前测试覆盖清单校验、Unicode 名称、桌宠库合并、语言设置迁移与原子写入、
 Codex 会话状态解析、内部审查过滤、watcher 生命周期、IPC、过期 socket、多显示器、
-全屏回退、桌宠安装和无损重装。
+全屏回退、桌宠安装和无损重装，也覆盖自动动作的时间与概率、手动覆盖、
+双菜单设置同步、并发任务、旧启动记录、非有限时间戳与 Special 素材校验。
 
 安装器会自动运行以下构建验证：
 

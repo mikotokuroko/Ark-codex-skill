@@ -8,6 +8,7 @@ REQUIRED_STATES = ("idle", "interact", "move", "sit", "sleep")
 IPC_COMMANDS = ("show", "hide", "shutdown", "refresh-library")
 IPC_SERVER_NAME = "com.astrariax.arkcodexdeskpet.command"
 SETTINGS_VERSION = 2
+AUTO_ANIMATIONS_KEY = "auto_animations"
 
 DEFAULT_SETTINGS = {
     "version": SETTINGS_VERSION,
@@ -25,5 +26,6 @@ DEFAULT_SETTINGS = {
     "pet": DEFAULT_PET,
     "pet_states": {},
     "autostart_with_codex": False,
+    AUTO_ANIMATIONS_KEY: False,
     "user_hidden": False,
 }

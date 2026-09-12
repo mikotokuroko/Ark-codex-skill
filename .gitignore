@@ -14,3 +14,6 @@ work/
 *.log
 *.pid
 *.flag
+
+!ark-codex-skill/assets/deskpet-app-macos/pets/
+!ark-codex-skill/assets/deskpet-app-macos/pets/**

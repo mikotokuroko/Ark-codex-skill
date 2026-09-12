@@ -12,7 +12,7 @@ try:
 except ImportError:
     sys.exit("playwright is required: run 'pip install playwright' first")
 
-ANIMATIONS = ["Default", "Interact", "Move", "Relax", "Sit", "Sleep"]
+ANIMATIONS = ["Interact", "Move", "Relax", "Sit", "Sleep"]
 LOAD_BTN = "\u70b9\u6b64\u8f7d\u5165\u6a21\u578b"
 JIANJI = "\u57fa\u5efa"
 
@@ -112,7 +112,18 @@ def run_export(operator, skin, out_dir):
             select_option(page, model_select, JIANJI)
 
             skin_label = skin or "\u9ed8\u8ba4"
-            for anim in ANIMATIONS:
+            anim_select = page.locator(".n-select").nth(2)
+            anim_select.click()
+            options = page.locator(".n-base-select-option")
+            options.first.wait_for(state="visible", timeout=30000)
+            available = [name.strip() for name in options.all_text_contents()]
+            page.keyboard.press("Escape")
+            missing = [name for name in ANIMATIONS if name not in available]
+            if missing:
+                raise RuntimeError(f"Missing required animations: {missing}; available: {available}")
+            animations = ANIMATIONS + (["Special"] if "Special" in available else [])
+            print("ANIMATIONS", animations, flush=True)
+            for anim in animations:
                 anim_select = page.locator(".n-select").nth(2)
                 select_option(page, anim_select, anim)
                 page.wait_for_timeout(2000)

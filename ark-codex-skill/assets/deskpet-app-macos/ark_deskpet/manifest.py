@@ -84,7 +84,7 @@ def validate_manifest(pet_dir: Path) -> dict[str, Any]:
     missing = [state for state in REQUIRED_STATES if state not in states]
     if missing:
         raise ManifestError(f"缺少必需动作：{', '.join(missing)}")
-    for state_name in REQUIRED_STATES:
+    for state_name in (*REQUIRED_STATES, *(("special",) if "special" in states else ())):
         info = states[state_name]
         if not isinstance(info, dict):
             raise ManifestError(f"动作 {state_name} 必须是对象")

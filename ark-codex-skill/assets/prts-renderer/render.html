@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<canvas id="pet" width="1000" height="1000"></canvas>
+<div id="spine-root" data-id="export" style="display:none"></div>
+<script>
+// The PRTS module publishes SpineApi before mounting its optional site widget.
+// Our exporter consumes only that API and does not mount a PRTS page.
+window.requestAnimationFrame = () => 0;
+window.boot = async (config) => {
+  await import('/runtime/' + config.entry);
+  if (!window.SpineApi) throw new Error('Renderer did not publish SpineApi');
+  const canvas = document.querySelector('canvas');
+  const api = new window.SpineApi(canvas);
+  const loaded = await api.load('pet', config.skeleton, config.atlas,
+    {x:-500,y:-200,scale:1}, config.skin || undefined, true);
+  api.activeSkeleton = 'pet'; api.bg = [0,0,0,0];
+  window.pet = {api, loaded, canvas};
+  return loaded.skeleton.data.animations.map(a => ({name:a.name,duration:a.duration}));
+};
+window.pose = (name, time) => {
+  const {state,skeleton} = pet.loaded;
+  state.clearTracks(); skeleton.setToSetupPose();
+  state.setAnimation(0,name,false); state.update(time); state.apply(skeleton);
+  skeleton.updateWorldTransform();
+};
+window.fit = (animations) => {
+  const {skeleton,bounds} = pet.loaded;
+  const offset = new bounds.offset.constructor(), size = new bounds.size.constructor();
+  let left=Infinity,bottom=Infinity,right=-Infinity,top=-Infinity;
+  for(const a of animations) for(let i=0;i<a.count;i++) {
+    pose(a.name,i/20); skeleton.getBounds(offset,size,[]);
+    if(![offset.x,offset.y,size.x,size.y].every(Number.isFinite)) continue;
+    left=Math.min(left,offset.x); bottom=Math.min(bottom,offset.y);
+    right=Math.max(right,offset.x+size.x); top=Math.max(top,offset.y+size.y);
+  }
+  if(!Number.isFinite(left)||right<=left||top<=bottom) throw new Error('No visible model bounds');
+  const worldSize=Math.max(1000,(right-left)/0.9,(top-bottom)/0.9);
+  pet.api.transform((left+right-worldSize)/2,(bottom+top-worldSize)/2,1000/worldSize);
+  return {left,bottom,right,top,scale:1000/worldSize};
+};
+window.frame = (name,time) => {
+  pose(name,time);
+  // PRTS render() normally advances by Date.now(). Freeze it for this synchronous
+  // draw: pose() already advanced to the canonical timestamp exactly once.
+  const now=Date.now; Date.now=()=>0; pet.api.lastFrameTime=0;
+  try { pet.api.render(); return pet.canvas.toDataURL('image/png'); }
+  finally { Date.now=now; }
+};
+</script>

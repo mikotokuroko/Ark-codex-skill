@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from .constants import DEFAULT_SETTINGS, SETTINGS_VERSION
+from .constants import AUTO_ANIMATIONS_KEY, DEFAULT_SETTINGS, SETTINGS_VERSION
 
 
 def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
@@ -49,6 +49,10 @@ def migrate_settings(raw: Any) -> dict[str, Any]:
         settings["language"] = "en"
     if not isinstance(settings.get("pet_states"), dict):
         settings["pet_states"] = {}
+    if not isinstance(settings.get(AUTO_ANIMATIONS_KEY), bool):
+        settings[AUTO_ANIMATIONS_KEY] = bool(
+            DEFAULT_SETTINGS[AUTO_ANIMATIONS_KEY]
+        )
     legacy_pet = raw.get("active_pet")
     if legacy_pet and not raw.get("pet"):
         settings["pet"] = legacy_pet

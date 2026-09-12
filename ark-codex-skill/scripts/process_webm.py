@@ -21,6 +21,7 @@ except ImportError:
 FPS = 20
 SIZE = 1000
 STATE_MAP = [
+    ("Special", "special"),
     ("Relax", "idle"),
     ("Interact", "interact"),
     ("Move", "move"),
@@ -140,6 +141,8 @@ def run(src, name, out):
             continue
         full = os.path.join(src, fname)
         if os.path.getsize(full) < 1000:
+            if "special" in fname.lower():
+                sys.exit("advertised Special export is broken: " + fname)
             print("skip broken webm:", fname)
             continue
         for token, state in STATE_MAP:
@@ -148,6 +151,9 @@ def run(src, name, out):
                 break
     if not state_files:
         sys.exit("no valid WebM files found in " + src)
+    missing = {"idle", "interact", "move", "sit", "sleep"} - state_files.keys()
+    if missing:
+        sys.exit("missing required animations: " + ", ".join(sorted(missing)))
 
     for fname in state_files.values():
         shutil.copy2(os.path.join(src, fname), os.path.join(webm_dir, fname))
