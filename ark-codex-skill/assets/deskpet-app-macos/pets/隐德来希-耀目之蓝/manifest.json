@@ -1,0 +1,72 @@
+{
+  "fps": 20,
+  "size": 1000,
+  "states": {
+    "idle": {
+      "duration": 4000,
+      "count": 80,
+      "bbox": [
+        365,
+        244,
+        578,
+        638
+      ],
+      "source": "PRTS 隐德来希 耀目之蓝 基建 Relax"
+    },
+    "interact": {
+      "duration": 3700,
+      "count": 74,
+      "bbox": [
+        325,
+        238,
+        635,
+        638
+      ],
+      "source": "PRTS 隐德来希 耀目之蓝 基建 Interact"
+    },
+    "move": {
+      "duration": 1350,
+      "count": 27,
+      "bbox": [
+        354,
+        237,
+        581,
+        640
+      ],
+      "source": "PRTS 隐德来希 耀目之蓝 基建 Move"
+    },
+    "sit": {
+      "duration": 4000,
+      "count": 80,
+      "bbox": [
+        353,
+        367,
+        611,
+        767
+      ],
+      "source": "PRTS 隐德来希 耀目之蓝 基建 Sit"
+    },
+    "sleep": {
+      "duration": 2000,
+      "count": 40,
+      "bbox": [
+        272,
+        479,
+        694,
+        682
+      ],
+      "source": "PRTS 隐德来希 耀目之蓝 基建 Sleep"
+    },
+    "special": {
+      "duration": 10850,
+      "count": 217,
+      "bbox": [
+        228,
+        235,
+        765,
+        642
+      ],
+      "source": "PRTS 隐德来希 耀目之蓝 基建 Special"
+    }
+  }
+}

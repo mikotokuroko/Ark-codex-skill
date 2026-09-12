@@ -15,6 +15,7 @@ default_pet = (
     / "pets"
     / default_pet_name
 )
+menu_icon = macos_root / "resources" / "ark-codex-tray.webp"
 additional_pet_data = []
 for pet in sorted((macos_root / "pets").glob("*")):
     if pet.is_dir() and (pet / "manifest.json").is_file():
@@ -41,6 +42,7 @@ app_analysis = Analysis(
             str(packaging / "com.astrariax.arkcodexdeskpet.watcher.plist"),
             "LaunchAgent",
         ),
+        (str(menu_icon), "resources"),
     ] + additional_pet_data,
     hiddenimports=[
         "AppKit",

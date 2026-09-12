@@ -51,12 +51,15 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 * 使用 macOS 应用事件监听 ChatGPT/Codex，不持续轮询进程
 * 全屏检测不申请屏幕录制或辅助功能权限
 
-macOS 应用内置予愿安洁莉娜、德克萨斯「意志」与结城理（默认服装），安装后可在桌宠库切换。
+macOS 应用内置予愿安洁莉娜及下列桌宠，安装后可在桌宠库切换。菜单栏使用 `docs/images/icon` 提供的角色图标。
 
 | 桌宠 | 动画 | 来源 |
 |---|---|---|
 | 德克萨斯「意志」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/德克萨斯) |
 | 结城理（默认服装） | Relax、Interact、Move、Sit、Sleep（此模型无 Special） | [PRTS](https://prts.wiki/w/结城理) |
+| 丰川祥子「旋律的主人」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/丰川祥子) |
+| 若叶睦「提线的本我」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/若叶睦) |
+| 隐德来希「耀目之蓝」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/隐德来希) |
 
 新增素材位于 `ark-codex-skill/assets/deskpet-app-macos/pets/`，构建时自动打包。
 用户安装的同名桌宠仍优先于内置版本。
@@ -146,7 +149,7 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 | 等待输入 | `Waiting for Input` | 上一轮已完成，等待用户继续输入 |
 | 错误 | `Codex Error` | 任务异常中止或失败 |
 
-要切换字幕语言，请打开 macOS 菜单栏中的 **A** 图标，选择
+要切换字幕语言，请打开 macOS 菜单栏中的桌宠图标，选择
 **Language → English** 或 **Language → 简体中文**。
 切换会立即生效，并保存在应用设置中供下次启动使用。
 

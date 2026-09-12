@@ -11,7 +11,7 @@ import sys
 import time
 from typing import Any
 
-from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -65,6 +65,7 @@ from .paths import (
     instance_path,
     ipc_socket_path,
     log_dir,
+    resource_root,
     settings_path,
     user_pets_dir,
 )
@@ -139,6 +140,9 @@ ANIMATION_LABELS = (
     ("sleep", "睡眠/sleep"),
     ("special", "特殊/special"),
 )
+MENU_ICON_RESOURCE = Path("resources") / "ark-codex-tray.webp"
+MENU_ICON_SIZE = 22
+MENU_ICON_DEVICE_PIXEL_RATIOS = (1, 2, 3)
 
 
 def configure_logging() -> None:
@@ -156,23 +160,61 @@ def configure_logging() -> None:
     root.addHandler(handler)
 
 
+def _fallback_menu_icon() -> QIcon:
+    """Returns a visible fallback when the bundled tray image is unavailable."""
+    icon = QIcon()
+    for device_pixel_ratio in MENU_ICON_DEVICE_PIXEL_RATIOS:
+        pixel_size = MENU_ICON_SIZE * device_pixel_ratio
+        pixmap = QPixmap(pixel_size, pixel_size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor(35, 145, 90))
+        painter.setPen(Qt.NoPen)
+        margin = 1.5 * device_pixel_ratio
+        diameter = 19 * device_pixel_ratio
+        painter.drawEllipse(margin, margin, diameter, diameter)
+        painter.setPen(QColor(255, 255, 255))
+        font = painter.font()
+        font.setBold(True)
+        font.setPixelSize(12 * device_pixel_ratio)
+        painter.setFont(font)
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, "A")
+        painter.end()
+        pixmap.setDevicePixelRatio(device_pixel_ratio)
+        icon.addPixmap(pixmap)
+    return icon
+
+
 def make_menu_icon() -> QIcon:
-    """Builds a template-like status-menu icon without external resources."""
-    pixmap = QPixmap(44, 44)
-    pixmap.fill(QColor(0, 0, 0, 0))
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
-    painter.setBrush(QColor(35, 145, 90))
-    painter.setPen(Qt.NoPen)
-    painter.drawEllipse(3, 3, 38, 38)
-    painter.setPen(QColor(255, 255, 255))
-    font = painter.font()
-    font.setBold(True)
-    font.setPixelSize(24)
-    painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignCenter, "A")
-    painter.end()
-    return QIcon(pixmap)
+    """Loads the supplied character image as a color-preserving tray icon."""
+    image_path = resource_root() / MENU_ICON_RESOURCE
+    image = QImage(str(image_path))
+    if image.isNull():
+        logging.getLogger(__name__).warning(
+            "Unable to load tray icon resource: %s", image_path
+        )
+        return _fallback_menu_icon()
+
+    icon = QIcon()
+    for device_pixel_ratio in MENU_ICON_DEVICE_PIXEL_RATIOS:
+        pixel_size = MENU_ICON_SIZE * device_pixel_ratio
+        scaled = image.scaled(
+            QSize(pixel_size, pixel_size),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        pixmap = QPixmap(pixel_size, pixel_size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        x = (pixel_size - scaled.width()) // 2
+        y = (pixel_size - scaled.height()) // 2
+        painter.drawImage(x, y, scaled)
+        painter.end()
+        pixmap.setDevicePixelRatio(device_pixel_ratio)
+        icon.addPixmap(pixmap)
+    return icon
 
 
 class SettingsDialog(QDialog):

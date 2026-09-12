@@ -1,0 +1,72 @@
+{
+  "fps": 20,
+  "size": 1000,
+  "states": {
+    "idle": {
+      "duration": 4000,
+      "count": 80,
+      "bbox": [
+        277,
+        460,
+        582,
+        840
+      ],
+      "source": "PRTS 丰川祥子 旋律的主人 基建 Relax"
+    },
+    "interact": {
+      "duration": 5650,
+      "count": 113,
+      "bbox": [
+        250,
+        458,
+        580,
+        851
+      ],
+      "source": "PRTS 丰川祥子 旋律的主人 基建 Interact"
+    },
+    "move": {
+      "duration": 3350,
+      "count": 67,
+      "bbox": [
+        282,
+        458,
+        587,
+        844
+      ],
+      "source": "PRTS 丰川祥子 旋律的主人 基建 Move"
+    },
+    "sit": {
+      "duration": 10000,
+      "count": 200,
+      "bbox": [
+        297,
+        570,
+        555,
+        949
+      ],
+      "source": "PRTS 丰川祥子 旋律的主人 基建 Sit"
+    },
+    "sleep": {
+      "duration": 4700,
+      "count": 94,
+      "bbox": [
+        235,
+        646,
+        655,
+        852
+      ],
+      "source": "PRTS 丰川祥子 旋律的主人 基建 Sleep"
+    },
+    "special": {
+      "duration": 19450,
+      "count": 389,
+      "bbox": [
+        263,
+        63,
+        759,
+        848
+      ],
+      "source": "PRTS 丰川祥子 旋律的主人 基建 Special"
+    }
+  }
+}

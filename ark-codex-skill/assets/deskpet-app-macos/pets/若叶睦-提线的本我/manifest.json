@@ -1,0 +1,72 @@
+{
+  "fps": 20,
+  "size": 1000,
+  "states": {
+    "idle": {
+      "duration": 13350,
+      "count": 267,
+      "bbox": [
+        326,
+        226,
+        617,
+        657
+      ],
+      "source": "PRTS 若叶睦 提线的本我 基建 Relax"
+    },
+    "interact": {
+      "duration": 4200,
+      "count": 84,
+      "bbox": [
+        326,
+        224,
+        720,
+        657
+      ],
+      "source": "PRTS 若叶睦 提线的本我 基建 Interact"
+    },
+    "move": {
+      "duration": 1950,
+      "count": 39,
+      "bbox": [
+        326,
+        220,
+        618,
+        660
+      ],
+      "source": "PRTS 若叶睦 提线的本我 基建 Move"
+    },
+    "sit": {
+      "duration": 5350,
+      "count": 107,
+      "bbox": [
+        340,
+        357,
+        625,
+        779
+      ],
+      "source": "PRTS 若叶睦 提线的本我 基建 Sit"
+    },
+    "sleep": {
+      "duration": 4000,
+      "count": 80,
+      "bbox": [
+        253,
+        470,
+        746,
+        674
+      ],
+      "source": "PRTS 若叶睦 提线的本我 基建 Sleep"
+    },
+    "special": {
+      "duration": 15700,
+      "count": 314,
+      "bbox": [
+        309,
+        221,
+        741,
+        660
+      ],
+      "source": "PRTS 若叶睦 提线的本我 基建 Special"
+    }
+  }
+}
