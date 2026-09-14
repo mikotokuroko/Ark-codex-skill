@@ -356,4 +356,13 @@ PRTS 页面改版可能影响自动化选择器。
 > 《明日方舟》素材版权归 Hypergryph 所有，PRTS 资料遵循其站内许可。
 > 本项目仅用于个人学习与自用，请勿用于商业发布。
 
+<div align="center">
+
+博士如果喜欢的话给repo点个star🌟 🥺
+
+Tell Me👏 Tell Me👏嘎嘎米⭐️哟嘎嘎米⭐️  
+一番👏好きな👏私👏👏になるの👏👏
+
+</div>
+
 [python]: https://formulae.brew.sh/formula/python@3.11
