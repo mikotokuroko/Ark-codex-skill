@@ -10,7 +10,7 @@ alt="Ark Codex Deskpet 图标">
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?style=flat-square&logo=apple)
 ![Apple silicon](https://img.shields.io/badge/Apple%20silicon-arm64-black?style=flat-square&logo=apple)
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
-[![Release](https://img.shields.io/github/v/release/mikotokuroko/Ark-codex-skill?include_prereleases&style=flat-square)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[![Release](https://img.shields.io/github/v/release/mikotokuroko/Ark-codex-skill?style=flat-square)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
 [![Release downloads](https://img.shields.io/github/downloads/mikotokuroko/Ark-codex-skill/total?style=flat-square&label=downloads)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
 [![skills.sh](https://skills.sh/b/mikotokuroko/ark-codex-skill)](https://skills.sh/mikotokuroko/ark-codex-skill)
 
@@ -29,9 +29,9 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 > macOS 应用使用本机 ad-hoc 签名，面向本地安装和个人使用。
 > 它不是 App Store 或公证发行包。
 
-## 下载与安装 / Downloads and skill installation
+## 下载与安装
 
-[下载 v0.2.2-beta.1 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v0.2.2-beta.1/Ark-Codex-Deskpet-v0.2.2-beta.1-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[下载 v.0.2.0 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.0/Ark-Codex-Deskpet-v.0.2.0-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
 
 这是包含 skill、动画素材和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
 `./ark-codex-skill/scripts/install_macos.sh`。请先满足下方的 macOS 环境要求。
@@ -51,7 +51,7 @@ npx skills add mikotokuroko/Ark-codex-skill --skill ark-codex-skill --agent code
 最新源码的 macOS 安装器和直接导出流程可自愿上报成功安装与桌宠生成次数，默认关闭。
 只发送随机事件 ID 和事件类型；不发送角色名、提示词或文件路径。非交互运行不会自动同意。
 关闭方式、隐私和统计范围见 [统计说明](docs/adoption-metrics.md#private-opt-in-counters)。
-现有 v0.2.2-beta.1 ZIP 尚不包含此功能；使用最新 `macos` 分支源码才能参与统计。
+v.0.2.0 源码包已包含此功能；统计仅在用户明确同意后启用。
 
 ## 平台支持
 

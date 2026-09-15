@@ -7,7 +7,7 @@ Track two separate measures:
 
 Do not add these figures together as a user count. Both begin with the new distribution routes; historical use cannot be recovered. Developer validation uses `DISABLE_TELEMETRY=1`.
 
-The README download badge shows GitHub downloads across **all release attachments**, including checksum files. For a résumé source-package count, use the ZIP-only query below. The release badge includes prereleases. Shields.io caches values, so badge updates may lag GitHub.
+The README download badge shows GitHub downloads across **all release attachments**, including checksum files. For a résumé source-package count, use the ZIP-only query below. The release badge shows the latest stable release. Shields.io caches values, so badge updates may lag GitHub.
 
 ## Read release downloads
 
@@ -63,7 +63,7 @@ Omit `--token-file` to enter the token at a hidden prompt. Totals include `insta
 
 ### Service maintenance
 
-Worker source/config are in `analytics/`. SQLite Durable Objects persist and deduplicate each event kind separately. Deploy with `wrangler deploy --config analytics/wrangler.jsonc`; set/rotate the secret with `wrangler secret put ADMIN_TOKEN --config analytics/wrangler.jsonc`. Keep the Durable Object namespace and migration history to preserve counts. Existing release ZIPs predate reporting; only updated source includes it.
+Worker source/config are in `analytics/`. SQLite Durable Objects persist and deduplicate each event kind separately. Deploy with `wrangler deploy --config analytics/wrangler.jsonc`; set/rotate the secret with `wrangler secret put ADMIN_TOKEN --config analytics/wrangler.jsonc`. Keep the Durable Object namespace and migration history to preserve counts. The v.0.2.0 source release includes reporting; the earlier v0.2.2-beta.1 archive does not.
 
 ## Résumé wording
 
