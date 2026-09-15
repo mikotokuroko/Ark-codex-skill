@@ -26,6 +26,29 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 > macOS 应用使用本机 ad-hoc 签名，面向本地安装和个人使用。
 > 它不是 App Store 或公证发行包。
 
+## 下载与安装 / Downloads and skill installation
+
+[下载 v0.2.2-beta.1 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v0.2.2-beta.1/Ark-Codex-Deskpet-v0.2.2-beta.1-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+
+这是包含 skill、动画素材和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
+`./ark-codex-skill/scripts/install_macos.sh`。请先满足下方的 macOS 环境要求。
+保留解压后的项目目录，其中的 `.venv-macos` 也用于生成桌宠。
+
+通过 skills.sh 为 Codex 安装 skill（需要 Node.js 和 npm）：
+
+```bash
+npx skills add mikotokuroko/Ark-codex-skill --skill ark-codex-skill --agent codex --global
+```
+
+该命令安装 skill 及其脚本和素材；macOS 应用仍需使用完整源码包单独安装。
+若已有同名 skill，请先备份自己的修改，再确认替换。
+
+**统计说明：** GitHub 统计上述发布附件的下载次数；skills.sh 统计通过其 CLI 上报的安装。
+两者都不是独立用户数，也不代表 skill 调用次数，不应相加作为用户数。
+skills CLI 可通过 `DISABLE_TELEMETRY=1` 关闭统计；桌宠应用未新增使用数据上报。
+统计从这些分发渠道启用后开始，无法补计历史下载或使用。
+查看和保存统计：[Adoption metrics](docs/adoption-metrics.md)。
+
 ## 平台支持
 
 | 平台 | 支持状态 | 运行方式 |

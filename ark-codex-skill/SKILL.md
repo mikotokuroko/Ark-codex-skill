@@ -8,6 +8,23 @@ description: Create transparent Arknights desktop pets from PRTS base-animation 
 Build a transparent Codex deskpet from PRTS operator models while preserving the
 cross-platform `manifest.json` schema.
 
+## Installed Skill and Application Setup
+
+When installed through `npx skills add`, this directory contains the skill scripts
+and assets, but not the repository-root build configuration or Python environment.
+Resolve script and reference paths relative to this SKILL.md, never the caller's
+working directory.
+
+On macOS, first locate the complete extracted release or repository checkout with
+`requirements-macos.txt`, `packaging/`, and `ark-codex-skill/`. If its location is
+unknown, ask the user where they extracted it. If missing, direct them to
+https://github.com/mikotokuroko/Ark-codex-skill/releases and the README setup steps.
+Run the Mac installer only from that complete project; do not run the copy inside
+a standalone installed skill. The installer creates `<project>/.venv-macos`.
+Use that environment's Python with absolute paths to this skill's export and
+installation scripts. The repository-relative examples below assume the complete
+project is the current directory.
+
 ## Choose a Platform
 
 - On macOS 13+ Apple silicon, use the installed `Ark Codex Deskpet.app` and the
