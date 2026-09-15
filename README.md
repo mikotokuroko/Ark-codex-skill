@@ -10,6 +10,9 @@ alt="Ark Codex Deskpet 图标">
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?style=flat-square&logo=apple)
 ![Apple silicon](https://img.shields.io/badge/Apple%20silicon-arm64-black?style=flat-square&logo=apple)
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/mikotokuroko/Ark-codex-skill?include_prereleases&style=flat-square)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[![Release downloads](https://img.shields.io/github/downloads/mikotokuroko/Ark-codex-skill/total?style=flat-square&label=downloads)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[![skills.sh](https://skills.sh/b/mikotokuroko/ark-codex-skill)](https://skills.sh/mikotokuroko/ark-codex-skill)
 
 [平台支持](#平台支持) · [功能特性](#功能特性) · [macOS 安装](#macos-安装) ·
 [生成桌宠](#生成新桌宠) · [本地开发](#本地开发)
