@@ -43,12 +43,6 @@ npx skills add mikotokuroko/Ark-codex-skill --skill ark-codex-skill --agent code
 该命令安装 skill 及其脚本和素材；macOS 应用仍需使用完整源码包单独安装。
 若已有同名 skill，请先备份自己的修改，再确认替换。
 
-**统计说明：** GitHub 统计上述发布附件的下载次数；skills.sh 统计通过其 CLI 上报的安装。
-两者都不是独立用户数，也不代表 skill 调用次数，不应相加作为用户数。
-skills CLI 可通过 `DISABLE_TELEMETRY=1` 关闭统计；桌宠应用未新增使用数据上报。
-统计从这些分发渠道启用后开始，无法补计历史下载或使用。
-查看和保存统计：[Adoption metrics](docs/adoption-metrics.md)。
-
 ## 平台支持
 
 | 平台 | 支持状态 | 运行方式 |
