@@ -30,7 +30,40 @@ The recommended installation command is:
 npx skills add mikotokuroko/Ark-codex-skill --skill ark-codex-skill --agent codex --global
 ```
 
-No per-invocation reporting has been added to the app or export scripts.
+## Private opt-in counters
+
+The macOS installer and direct `export_pet.py` workflow offer optional reporting, defaulting to **no**. Reports go to `https://ark-adoption.hoicheoklam.workers.dev/events`.
+
+- `installation`: after a successful Mac app installation/launch. Counted once per local reporting state, not once per update. Deleting state or using another machine can count again. Windows scaffold installs and `npx skills add` alone are not measured.
+- `pet_generation`: after a complete direct export succeeds. Failed exports and preflight-only runs are excluded. Legacy browser/WebM workflows are not measured.
+- Payload: a random event ID and event type. The service adds a receipt timestamp. No prompts, character names, session data, file paths, or persistent cross-event user ID are stored.
+- Cloudflare handles the network connection and sees the source IP; an edge rate limiter uses it transiently. Worker request logging is disabled and the counter database does not store IPs.
+- Reporting failures never fail installation/export. Up to 100 pending events are saved locally; one is attempted per subsequent successful action, with a two-second network timeout. Retries reuse the event ID. Offline/opted-out clients and discarded queue entries are not counted.
+- Noninteractive runs never assume consent. `ARK_DISABLE_REPORTING=1`, `DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`, CI and pytest runs suppress sending.
+
+Change consent from the full project:
+
+```sh
+.venv-macos/bin/python ark-codex-skill/scripts/adoption.py enable
+.venv-macos/bin/python ark-codex-skill/scripts/adoption.py disable
+.venv-macos/bin/python ark-codex-skill/scripts/adoption.py status
+```
+
+Disabling clears pending events. Previously received counts remain. On macOS, consent and pending events are in `~/Library/Application Support/Ark Codex Deskpet/adoption.json`. If an interrupted process leaves `adoption.lock`, reporting skips safely; remove that empty lock directory only after the installer/export has exited.
+
+### Owner access
+
+`GET /totals` requires `Authorization: Bearer <ADMIN_TOKEN>`. The token is a Worker secret and is never distributed with the app or committed. Read privately with:
+
+```sh
+python3 analytics/read_totals.py --token-file /path/to/private/admin-token
+```
+
+Omit `--token-file` to enter the token at a hidden prompt. Totals include `installation`, `pet_generation` and `as_of`. Use “reported opted-in installations” and “reported successful pet generations” in a résumé. Public event submission is rate-limited but cannot prove genuine usage: a distributed open-source client cannot keep a signing secret. These are adoption estimates, not audited unique users.
+
+### Service maintenance
+
+Worker source/config are in `analytics/`. SQLite Durable Objects persist and deduplicate each event kind separately. Deploy with `wrangler deploy --config analytics/wrangler.jsonc`; set/rotate the secret with `wrangler secret put ADMIN_TOKEN --config analytics/wrangler.jsonc`. Keep the Durable Object namespace and migration history to preserve counts. Existing release ZIPs predate reporting; only updated source includes it.
 
 ## Résumé wording
 

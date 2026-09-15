@@ -279,9 +279,14 @@ def main():
     parser.add_argument('--runtime-dir',type=Path,default=RUNTIME)
     parser.add_argument('--chrome'); parser.add_argument('--preflight',action='store_true')
     args=parser.parse_args()
+    import adoption
+    if not args.preflight:
+        adoption.consent()
     try: run(args)
     except Exception as error:
         report('failed', error=str(error)); raise SystemExit(1) from error
+    if not args.preflight:
+        adoption.record('pet_generation')
 
 
 if __name__ == '__main__': main()

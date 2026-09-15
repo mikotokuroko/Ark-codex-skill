@@ -32,6 +32,16 @@ project is the current directory.
 - On Windows, keep using the original `assets/deskpet-app` scaffold and Windows
   workflow. Do not copy macOS runtime paths or launchd behavior into it.
 
+## Optional Adoption Reporting
+
+The installer and direct export offer optional installation and successful-generation
+counts. Never opt in on the user's behalf, including when running noninteractively.
+If the user asks to enable reporting, explain that only a random event ID and event
+type go to the developer's Cloudflare service, then run `scripts/adoption.py enable`
+with the project Python after their explicit agreement. Use `disable` to opt out.
+Noninteractive exports with no saved consent proceed without sending anything.
+Development and verification runs must set `ARK_DISABLE_REPORTING=1`.
+
 ## Pet-Generation Workflow
 
 1. Confirm the operator name and optional skin. Use `默认` when no skin is given.

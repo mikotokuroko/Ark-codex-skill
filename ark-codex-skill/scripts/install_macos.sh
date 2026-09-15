@@ -138,6 +138,7 @@ main() {
   open "${TARGET_APP}"
   echo "已安装并启动：${TARGET_APP}"
   echo "用户数据保留在：${SUPPORT_DIR}"
+  "${VENV_PYTHON}" "${SCRIPT_DIR}/adoption.py" installation || true
 }
 
 main "$@"

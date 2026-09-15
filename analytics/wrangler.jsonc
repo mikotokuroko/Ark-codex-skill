@@ -1,0 +1,12 @@
+{
+  "name": "ark-adoption",
+  "main": "entry.mjs",
+  "account_id": "7d8da37df27ca5bb51fd9b92c43d899f",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {"enabled": false},
+  "durable_objects": {"bindings": [{"name": "COUNTERS", "class_name": "AdoptionCounter"}]},
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["AdoptionCounter"]}],
+  "ratelimits": [{"name": "EVENT_LIMITER", "namespace_id": "1001", "simple": {"limit": 30, "period": 60}}]
+}
