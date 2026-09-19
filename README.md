@@ -393,3 +393,20 @@ Tell Me👏 Tell Me👏嘎嘎米⭐️哟嘎嘎米⭐️
 </div>
 
 [python]: https://formulae.brew.sh/formula/python@3.11
+
+## 更新已安装的 macOS 应用
+
+在原来的 Git 仓库目录运行：
+
+```bash
+git pull --ff-only origin macos
+./ark-codex-skill/scripts/install_macos.sh
+```
+
+如果之前下载的是 ZIP，请从仓库的 `macos` 分支选择 **Code → Download ZIP**，
+解压到新文件夹后，在该文件夹运行同一安装命令。旧发布附件不会随源码更新。
+安装会替换应用，但保留用户桌宠和设置。若 Git 提示有本地修改，请先保留修改，不要强制覆盖。
+
+右键桌宠 → **设置…** 可勾选 **显示菜单栏图标**，或点击 **更换图标…** 选择
+PNG、WebP、JPEG 等本地图片。点击 OK 后生效；**恢复默认** 可还原内置图标。
+图片保存在当前 Mac 的 Application Support 中，不上传网络。其他电脑需要自行选择图片。

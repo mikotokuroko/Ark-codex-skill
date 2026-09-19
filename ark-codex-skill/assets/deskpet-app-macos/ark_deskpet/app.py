@@ -24,6 +24,8 @@ from PySide6.QtGui import (
     QPalette,
     QPixmap,
 )
+import uuid
+
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -31,6 +33,8 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFileDialog,
+    QPushButton,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -186,10 +190,12 @@ def _fallback_menu_icon() -> QIcon:
     return icon
 
 
-def make_menu_icon() -> QIcon:
+def make_menu_icon(custom_path: str | None = None) -> QIcon:
     """Loads the supplied character image as a color-preserving tray icon."""
-    image_path = resource_root() / MENU_ICON_RESOURCE
+    image_path = Path(custom_path) if custom_path else resource_root() / MENU_ICON_RESOURCE
     image = QImage(str(image_path))
+    if image.isNull() and custom_path:
+        return make_menu_icon()
     if image.isNull():
         logging.getLogger(__name__).warning(
             "Unable to load tray icon resource: %s", image_path
@@ -265,6 +271,22 @@ class SettingsDialog(QDialog):
         self.auto_hide.setChecked(
             bool(settings.get("auto_hide_fullscreen"))
         )
+        self.menu_bar_icon = QCheckBox("显示菜单栏图标")
+        self.menu_bar_icon.setChecked(bool(settings.get("show_menu_bar_icon", True)))
+        self.custom_icon_path = settings.get("menu_bar_icon_path", "")
+        self.pending_icon = None
+        icon_row = QWidget()
+        icon_layout = QHBoxLayout(icon_row)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        self.icon_preview = QLabel()
+        self.icon_preview.setPixmap(make_menu_icon(self.custom_icon_path).pixmap(32, 32))
+        choose_icon = QPushButton("更换图标…")
+        choose_icon.clicked.connect(self.choose_menu_icon)
+        reset_icon = QPushButton("恢复默认")
+        reset_icon.clicked.connect(self.reset_menu_icon)
+        icon_layout.addWidget(self.icon_preview)
+        icon_layout.addWidget(choose_icon)
+        icon_layout.addWidget(reset_icon)
         self.autostart = QCheckBox(
             "随 ChatGPT/Codex 启动（登录后监听主程序）"
         )
@@ -275,6 +297,8 @@ class SettingsDialog(QDialog):
         form.addRow("字幕大小", size_row)
         form.addRow("字条长度", bar_row)
         form.addRow("", self.mini_mode)
+        form.addRow("", self.menu_bar_icon)
+        form.addRow("菜单栏图标", icon_row)
         form.addRow("", self.auto_hide)
         form.addRow("", self.autostart)
         layout.addLayout(form)
@@ -285,6 +309,26 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def choose_menu_icon(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "选择菜单栏图标", "", "图片 (*.png *.webp *.jpg *.jpeg *.ico *.bmp)"
+        )
+        if not filename:
+            return
+        image = QImage(filename)
+        if image.isNull():
+            QMessageBox.warning(self, "无法读取图片", "请选择有效的 PNG、WebP 或 JPEG 图片。")
+            return
+        self.pending_icon = image.scaled(256, 256, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.icon_preview.setPixmap(QPixmap.fromImage(self.pending_icon).scaled(
+            32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.menu_bar_icon.setChecked(True)
+
+    def reset_menu_icon(self) -> None:
+        self.pending_icon = None
+        self.custom_icon_path = ""
+        self.icon_preview.setPixmap(make_menu_icon().pixmap(32, 32))
 
     @staticmethod
     def _slider_row(slider: QSlider, suffix: str) -> tuple[QWidget, QLabel]:
@@ -307,6 +351,7 @@ class SettingsDialog(QDialog):
             "subtitle_size": self.subtitle_size.value(),
             "bar_length": self.bar_length.value(),
             "mini_mode": self.mini_mode.isChecked(),
+            "show_menu_bar_icon": self.menu_bar_icon.isChecked(),
             "auto_hide_fullscreen": self.auto_hide.isChecked(),
             "autostart_with_codex": self.autostart.isChecked(),
         }
@@ -847,11 +892,11 @@ class DeskpetController:
         self.refresh_library(create_window=False)
         self.window = PetWindow(self)
         self.app.aboutToQuit.connect(self.window.save_pet_state)
-        self.tray = QSystemTrayIcon(make_menu_icon(), self.app)
+        self.tray = QSystemTrayIcon(make_menu_icon(self.settings.get("menu_bar_icon_path")), self.app)
         self.tray.setToolTip("Ark Codex 桌宠")
         self.tray.activated.connect(self._tray_activated)
         self._build_tray_menu()
-        self.tray.show()
+        self.tray.setVisible(bool(self.settings.get("show_menu_bar_icon", True)))
         if not self.user_hidden:
             self.window.show()
 
@@ -997,8 +1042,23 @@ class DeskpetController:
         if dialog.exec() != QDialog.Accepted:
             return
         values = dialog.values()
+        icon_path = dialog.custom_icon_path
+        if dialog.pending_icon is not None:
+            try:
+                icon_dir = settings_path().parent / "Icons"
+                icon_dir.mkdir(parents=True, exist_ok=True)
+                target = icon_dir / f"menu-{uuid.uuid4().hex}.png"
+                if not dialog.pending_icon.save(str(target), "PNG"):
+                    raise OSError("图片无法保存")
+                icon_path = str(target)
+            except OSError as error:
+                QMessageBox.warning(self.window, "无法保存图标", str(error))
+                return
+        values["menu_bar_icon_path"] = icon_path
         old_autostart = launch_agent_enabled()
         self.settings.update(values)
+        self.tray.setIcon(make_menu_icon(icon_path))
+        self.tray.setVisible(bool(values["show_menu_bar_icon"]))
         self.window.speed = float(values["speed"])
         self.window.animation_timer.setInterval(self.window.tick_ms())
         self.window.apply_geometry()
