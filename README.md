@@ -10,6 +10,9 @@ alt="Ark Codex Deskpet 图标">
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?style=flat-square&logo=apple)
 ![Apple silicon](https://img.shields.io/badge/Apple%20silicon-arm64-black?style=flat-square&logo=apple)
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/mikotokuroko/Ark-codex-skill?style=flat-square)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[![Release downloads](https://img.shields.io/github/downloads/mikotokuroko/Ark-codex-skill/total?style=flat-square&label=downloads)](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[![skills.sh](https://skills.sh/b/mikotokuroko/ark-codex-skill)](https://skills.sh/mikotokuroko/ark-codex-skill)
 
 [平台支持](#平台支持) · [功能特性](#功能特性) · [macOS 安装](#macos-安装) ·
 [生成桌宠](#生成新桌宠) · [本地开发](#本地开发)
@@ -25,6 +28,30 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 > [!NOTE]
 > macOS 应用使用本机 ad-hoc 签名，面向本地安装和个人使用。
 > 它不是 App Store 或公证发行包。
+
+## 下载与安装
+
+[下载 v.0.2.0 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.0/Ark-Codex-Deskpet-v.0.2.0-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+
+这是包含 skill、动画素材和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
+`./ark-codex-skill/scripts/install_macos.sh`。请先满足下方的 macOS 环境要求。
+保留解压后的项目目录，其中的 `.venv-macos` 也用于生成桌宠。
+
+通过 skills.sh 为 Codex 安装 skill（需要 Node.js 和 npm）：
+
+```bash
+npx skills add mikotokuroko/Ark-codex-skill --skill ark-codex-skill --agent codex --global
+```
+
+该命令安装 skill 及其脚本和素材；macOS 应用仍需使用完整源码包单独安装。
+若已有同名 skill，请先备份自己的修改，再确认替换。
+
+## 可选统计 / Optional reporting
+
+最新源码的 macOS 安装器和直接导出流程可自愿上报成功安装与桌宠生成次数，默认关闭。
+只发送随机事件 ID 和事件类型；不发送角色名、提示词或文件路径。非交互运行不会自动同意。
+关闭方式、隐私和统计范围见 [统计说明](docs/adoption-metrics.md#private-opt-in-counters)。
+v.0.2.0 源码包已包含此功能；统计仅在用户明确同意后启用。
 
 ## 平台支持
 
@@ -399,4 +426,30 @@ PRTS 页面改版可能影响自动化选择器。
 > 《明日方舟》素材版权归 Hypergryph 所有，PRTS 资料遵循其站内许可。
 > 本项目仅用于个人学习与自用，请勿用于商业发布。
 
+<div align="center">
+
+博士如果喜欢的话给repo点个star🌟 🥺
+
+Tell Me👏 Tell Me👏嘎嘎米⭐️哟嘎嘎米⭐️<br>
+一番👏好きな👏私👏👏になるの👏👏
+
+</div>
+
 [python]: https://formulae.brew.sh/formula/python@3.11
+
+## 更新已安装的 macOS 应用
+
+在原来的 Git 仓库目录运行：
+
+```bash
+git pull --ff-only origin macos
+./ark-codex-skill/scripts/install_macos.sh
+```
+
+如果之前下载的是 ZIP，请从仓库的 `macos` 分支选择 **Code → Download ZIP**，
+解压到新文件夹后，在该文件夹运行同一安装命令。旧发布附件不会随源码更新。
+安装会替换应用，但保留用户桌宠和设置。若 Git 提示有本地修改，请先保留修改，不要强制覆盖。
+
+右键桌宠 → **设置…** 可勾选 **显示菜单栏图标**，或点击 **更换图标…** 选择
+PNG、WebP、JPEG 等本地图片。点击 OK 后生效；**恢复默认** 可还原内置图标。
+图片保存在当前 Mac 的 Application Support 中，不上传网络。其他电脑需要自行选择图片。

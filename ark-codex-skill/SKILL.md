@@ -8,12 +8,39 @@ description: Create transparent Arknights desktop pets from PRTS base-animation 
 Build a transparent Codex deskpet from PRTS operator models while preserving the
 cross-platform `manifest.json` schema.
 
+## Installed Skill and Application Setup
+
+When installed through `npx skills add`, this directory contains the skill scripts
+and assets, but not the repository-root build configuration or Python environment.
+Resolve script and reference paths relative to this SKILL.md, never the caller's
+working directory.
+
+On macOS, first locate the complete extracted release or repository checkout with
+`requirements-macos.txt`, `packaging/`, and `ark-codex-skill/`. If its location is
+unknown, ask the user where they extracted it. If missing, direct them to
+https://github.com/mikotokuroko/Ark-codex-skill/releases and the README setup steps.
+Run the Mac installer only from that complete project; do not run the copy inside
+a standalone installed skill. The installer creates `<project>/.venv-macos`.
+Use that environment's Python with absolute paths to this skill's export and
+installation scripts. The repository-relative examples below assume the complete
+project is the current directory.
+
 ## Choose a Platform
 
 - On macOS 13+ Apple silicon, use the installed `Ark Codex Deskpet.app` and the
   macOS workflow below. Store generated pets only in Application Support.
 - On Windows, keep using the original `assets/deskpet-app` scaffold and Windows
   workflow. Do not copy macOS runtime paths or launchd behavior into it.
+
+## Optional Adoption Reporting
+
+The installer and direct export offer optional installation and successful-generation
+counts. Never opt in on the user's behalf, including when running noninteractively.
+If the user asks to enable reporting, explain that only a random event ID and event
+type go to the developer's Cloudflare service, then run `scripts/adoption.py enable`
+with the project Python after their explicit agreement. Use `disable` to opt out.
+Noninteractive exports with no saved consent proceed without sending anything.
+Development and verification runs must set `ARK_DISABLE_REPORTING=1`.
 
 ## Pet-Generation Workflow
 

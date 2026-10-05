@@ -369,9 +369,14 @@ def main():
     parser.add_argument('--model-group', default='基建', help='PRTS model group to discover (default: 基建)')
     parser.add_argument('--fps', type=int, choices=SUPPORTED_FPS, default=FPS)
     args=parser.parse_args()
+    import adoption
+    if not args.preflight:
+        adoption.consent()
     try: run(args)
     except Exception as error:
         report('failed', error=str(error)); raise SystemExit(1) from error
+    if not args.preflight:
+        adoption.record('pet_generation')
 
 
 if __name__ == '__main__': main()
