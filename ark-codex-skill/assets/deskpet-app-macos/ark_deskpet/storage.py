@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
 from typing import Any
 
-from .constants import AUTO_ANIMATIONS_KEY, DEFAULT_SETTINGS, SETTINGS_VERSION
+from .constants import AUTO_ANIMATIONS_KEY, BEHAVIOR_RANGES, DEFAULT_SETTINGS, SETTINGS_VERSION
 
 
 def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
@@ -45,6 +46,13 @@ def migrate_settings(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return settings
     settings.update(raw)
+    for key, (low, high, default) in BEHAVIOR_RANGES.items():
+        try:
+            number = float(settings[key])
+            settings[key] = max(low, min(high, int(number))) if math.isfinite(number) else default
+        except (ValueError, TypeError, OverflowError):
+            settings[key] = default
+    settings["pause_max"] = max(settings["pause_min"], settings["pause_max"])
     if settings.get("language") not in ("en", "zh-Hans"):
         settings["language"] = "en"
     if not isinstance(settings.get("pet_states"), dict):

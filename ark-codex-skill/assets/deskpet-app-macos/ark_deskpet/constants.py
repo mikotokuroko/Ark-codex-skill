@@ -10,6 +10,15 @@ IPC_SERVER_NAME = "com.astrariax.arkcodexdeskpet.command"
 SETTINGS_VERSION = 3
 AUTO_ANIMATIONS_KEY = "auto_animations"
 
+BEHAVIOR_RANGES = {
+    "activity_frequency": (25, 200, 100),
+    "walking_frequency": (0, 100, 60),
+    "walking_speed": (5, 100, 24),
+    "walking_distance": (20, 500, 160),
+    "pause_min": (2, 120, 8),
+    "pause_max": (2, 120, 25),
+}
+
 DEFAULT_SETTINGS = {
     "version": SETTINGS_VERSION,
     "language": "en",
@@ -36,3 +45,5 @@ DEFAULT_SETTINGS = {
     "click_through": False,
     "instance_states": {},
 }
+
+DEFAULT_SETTINGS.update({key: values[2] for key, values in BEHAVIOR_RANGES.items()})

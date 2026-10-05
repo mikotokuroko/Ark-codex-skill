@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 import math
+import random
 from typing import Iterable
 
 from .display import Rect
@@ -72,17 +73,18 @@ class PhysicsBody:
         dt = max(0.0, min(float(dt), 0.1))
         if dt == 0:
             return
-        if walk_speed and abs(self.vx) < 1e-3:
-            self.vx = walk_speed
+        self.vx = walk_speed
         self.vy += gravity * dt
         self.x += self.vx * dt
         self.y += self.vy * dt
-        left, right = bounds.x, bounds.right - self.width
+        left, right = bounds.x, max(bounds.x, bounds.right - self.width)
         floor = bounds.bottom - self.height
         ceiling = bounds.y
         if self.x <= left or self.x >= right:
             self.x = max(left, min(self.x, right))
-            self.vx *= -1
+            self.vx = 0.0
+        if not gravity and not self.vy:
+            return
         if self.y >= floor:
             self.y, self.vy, self.grounded = floor, 0.0, True
         elif self.y <= ceiling:
@@ -121,3 +123,64 @@ def next_instance_id(states: Iterable[PetInstanceState]) -> str:
     while f"pet-{index}" in used:
         index += 1
     return f"pet-{index}"
+
+
+class WanderMotion:
+    """One short, randomly directed walk; reaching an edge ends the walk."""
+
+    def __init__(self, rng=None) -> None:
+        self.rng = rng or random.Random()
+        self.target: float | None = None
+        self.speed = 0.0
+        self.max_distance = 160.0
+        self.base_speed = 24.0
+
+    def stop(self) -> None:
+        self.target = None
+        self.speed = 0.0
+
+    def begin(self, body: PhysicsBody, bounds: Rect) -> bool:
+        left = float(bounds.x)
+        right = float(max(bounds.x, bounds.right - body.width))
+        # An offscreen or oversized pet is not teleported into a new lane.
+        if not left <= body.x <= right:
+            self.stop()
+            return False
+        choices = []
+        if body.x - left >= 20:
+            choices.append(-1)
+        if right - body.x >= 20:
+            choices.append(1)
+        if not choices:
+            self.stop()
+            return False
+        direction = self.rng.choice(choices)
+        room = body.x - left if direction < 0 else right - body.x
+        distance = self.rng.uniform(min(35.0, room, self.max_distance), min(self.max_distance, room))
+        self.target = body.x + direction * distance
+        self.speed = direction * self.rng.uniform(self.base_speed * 0.8, self.base_speed * 1.2)
+        return True
+
+    def step(self, body: PhysicsBody, bounds: Rect, dt: float) -> bool:
+        """Return True on arrival; keep fractional position between ticks."""
+        if self.target is None:
+            return True
+        left, right = bounds.x, max(bounds.x, bounds.right - body.width)
+        if not left <= body.x <= right:
+            self.stop()
+            body.vx = body.vy = 0.0
+            return True
+        target = max(left, min(self.target, right))
+        distance = target - body.x
+        travel = abs(self.speed) * max(0.0, min(dt, 0.1))
+        body.vy = 0.0
+        if abs(distance) <= travel or distance * self.speed <= 0:
+            body.x = target
+            body.vx = 0.0
+            self.stop()
+            return True
+        body.step(dt, bounds, walk_speed=self.speed)
+        if body.vx == 0:
+            self.stop()
+            return True
+        return False

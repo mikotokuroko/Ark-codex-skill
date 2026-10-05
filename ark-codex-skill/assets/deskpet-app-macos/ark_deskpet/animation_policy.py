@@ -65,6 +65,13 @@ class AnimationPolicy:
         self._rng = rng or random.Random()
         now = float(self._clock())
         self.enabled = False
+        self.motion_enabled = False
+        self.activity_frequency = 100
+        self.walking_frequency = 60
+        self.pause_min = 8
+        self.pause_max = 25
+        self.walk_finished = False
+        self._rest_cycles = 0
         self.mode = IDLE_MODE
         self._active_mode = IDLE_MODE
         self._pending_mode: str | None = None
@@ -120,7 +127,7 @@ class AnimationPolicy:
             values = {str(value) for value in states}
         else:
             values = {str(value) for value in states}
-        self._available_states = set(values) | set(BASE_STATES)
+        self._available_states = set(values)
 
     def diversion_plan(self) -> tuple[tuple[str, float], ...]:
         """Returns weighted choices for one complete diversion.
@@ -169,6 +176,7 @@ class AnimationPolicy:
     def _transition(
         self, state: str, hold: bool, reason: str = "auto"
     ) -> PolicyTransition:
+        self.walk_finished = False
         self.state = state
         self.hold = hold
         return PolicyTransition(state, hold, reason)
@@ -180,13 +188,13 @@ class AnimationPolicy:
         if reset_activity:
             self.last_activity = now
         self._diversion_active = False
-        self.deadline = now + self._uniform(IDLE_MIN_SECONDS, IDLE_MAX_SECONDS)
+        self.deadline = now + self._uniform(IDLE_MIN_SECONDS, IDLE_MAX_SECONDS) * 100 / self.activity_frequency
         return self._transition(RELAX_STATE, True, "auto-relax")
 
     def _enter_running(self, now: float) -> PolicyTransition:
         self._active_mode = RUNNING_MODE
         self._diversion_active = False
-        self.deadline = now + self._uniform(MOVE_MIN_SECONDS, MOVE_MAX_SECONDS)
+        self.deadline = now + self._uniform(MOVE_MIN_SECONDS, MOVE_MAX_SECONDS) * 100 / self.activity_frequency
         return self._transition("move", True, "auto-running")
 
     def _enter_sleep(self) -> PolicyTransition:
@@ -209,19 +217,23 @@ class AnimationPolicy:
         self.last_activity = timestamp
         self._pending_mode = None
         self._override = None
+        if self.motion_enabled:
+            return self._enter_motion_rest(timestamp)
         if self.mode == RUNNING_MODE:
             return self._enter_running(timestamp)
         return self._enter_relax(timestamp)
 
     def disable(self, now: float | None = None) -> PolicyTransition:
         """Disables automatic playback and immediately returns to Relax."""
-        del now  # Disabling must not count as user activity.
+        timestamp = self._now(now)
         self.enabled = False
         self._pending_mode = None
         self._override = None
         self._active_mode = IDLE_MODE
         self._diversion_active = False
         self.deadline = None
+        if self.motion_enabled:
+            return self._enter_motion_rest(timestamp)
         return self._transition(RELAX_STATE, True, "manual-relax")
 
     def set_enabled(
@@ -229,6 +241,82 @@ class AnimationPolicy:
     ) -> PolicyTransition:
         """Sets the auto toggle, returning the state that should be shown."""
         return self.enable(now) if enabled else self.disable(now)
+
+    def set_motion_enabled(self, enabled: bool, now: float | None = None) -> PolicyTransition | None:
+        """Give wandering and animation a single owner while motion is enabled."""
+        if self.motion_enabled == bool(enabled):
+            return None
+        self.motion_enabled = bool(enabled)
+        self._pending_mode = None
+        if self.override_active:
+            return None
+        timestamp = self._now(now)
+        if self.motion_enabled:
+            return self._enter_motion_rest(timestamp)
+        if self.enabled:
+            return self._enter_running(timestamp) if self.mode == RUNNING_MODE else self._enter_relax(timestamp)
+        self.deadline = None
+        return self._transition(RELAX_STATE, True, "motion-disabled")
+
+    def _enter_motion_rest(self, now: float) -> PolicyTransition:
+        self.deadline = now + self._uniform(self.pause_min, self.pause_max)
+        self._diversion_active = False
+        state = "idle" if "idle" in self._available_states else next(
+            (state for state in ("sit", "interact", "sleep") if state in self._available_states),
+            "idle",
+        )
+        return self._transition(state, True, "wander-rest")
+
+    def finish_walk(self, now: float | None = None) -> PolicyTransition | None:
+        """Stop translation now, but finish the visual walk cycle before resting."""
+        if not self.motion_enabled or self.override_active or self.state != "move":
+            return None
+        self.walk_finished = True
+        return None
+
+    def _advance_motion(self, now: float) -> PolicyTransition | None:
+        if self.walk_finished:
+            return self._enter_motion_rest(now)
+        if self._diversion_active:
+            self._rest_cycles -= 1
+            if self._rest_cycles > 0:
+                return None
+            return self._enter_motion_rest(now)
+        if self.enabled and self.mode == IDLE_MODE and self.inactivity(now) >= INACTIVITY_SLEEP_SECONDS:
+            if self.state != "sleep" or self.deadline is not None:
+                return self._enter_sleep()
+            return None
+        if self.deadline is None:
+            return None
+        if now < self.deadline:
+            return None
+        if self.state == "move" or self._diversion_active:
+            return self._enter_motion_rest(now)
+        # Staying relaxed is a valid choice, rather than a compulsory action.
+        if self._random_unit() >= min(0.95, 0.75 * self.activity_frequency / 100):
+            return self._enter_motion_rest(now)
+        walking_weight = self.walking_frequency if "move" in self._available_states else 0
+        rests = [(state, weight) for state, weight in
+                 (("sit", 20), ("interact", 15), ("special", 5))
+                 if state in self._available_states]
+        total = sum(weight for _, weight in rests)
+        choices = [(state, weight * (100 - walking_weight) / total)
+                   for state, weight in rests if walking_weight < 100]
+        if walking_weight:
+            choices.insert(0, ("move", walking_weight))
+        if not choices:
+            return self._enter_motion_rest(now)
+        draw = self._random_unit() * sum(weight for _, weight in choices)
+        selected = choices[-1][0]
+        for state, weight in choices:
+            draw -= weight
+            if draw < 0:
+                selected = state
+                break
+        self._diversion_active = selected != "move"
+        self._rest_cycles = int(self._uniform(1, 3.999))
+        self.deadline = now + self._uniform(3.0, 8.0) if selected == "move" else now
+        return self._transition(selected, True, "wander-choice")
 
     @staticmethod
     def _normalize_mode(mode: str) -> str:
@@ -244,7 +332,14 @@ class AnimationPolicy:
         """
         requested = self._normalize_mode(mode)
         timestamp = self._now(now)
+        previous_mode = self.mode
         self.mode = requested
+        if self.motion_enabled:
+            if self.enabled and previous_mode == RUNNING_MODE and requested == IDLE_MODE:
+                self.last_activity = timestamp
+            if self.enabled and requested == RUNNING_MODE and self.state == "sleep" and not self.override_active:
+                return self._enter_motion_rest(timestamp)
+            return None
         if not self.enabled:
             return None
         if (
@@ -267,6 +362,8 @@ class AnimationPolicy:
     def _resume_after_override(self, now: float) -> PolicyTransition:
         self._override = None
         self.last_activity = now
+        if self.motion_enabled:
+            return self._enter_motion_rest(now)
         if not self.enabled:
             self._active_mode = IDLE_MODE
             self.deadline = None
@@ -344,6 +441,8 @@ class AnimationPolicy:
                 return None
             return self._resume_after_override(timestamp)
 
+        if self.motion_enabled:
+            return self._advance_motion(timestamp)
         if not self.enabled:
             return None
 

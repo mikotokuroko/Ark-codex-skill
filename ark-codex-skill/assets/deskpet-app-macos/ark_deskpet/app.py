@@ -40,6 +40,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QSlider,
+    QSpinBox,
+    QTabWidget,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
@@ -48,11 +50,12 @@ from PySide6.QtWidgets import (
 from .animation_policy import AnimationPolicy, PolicyTransition
 from .constants import (
     APP_NAME,
+    BEHAVIOR_RANGES,
     AUTO_ANIMATIONS_KEY,
     BUNDLE_ID,
     DEFAULT_PET,
 )
-from .display import Rect, recover_position
+from .display import Rect, intersection_area, recover_position
 from .fullscreen import FullscreenDetector
 from .ipc import CommandServer, send_command
 from .launch_agent import (
@@ -88,7 +91,7 @@ from .storage import (
     load_settings,
     save_settings,
 )
-from .runtime import PhysicsBody, repel_bodies
+from .runtime import PhysicsBody, WanderMotion
 from .effects import DialogueProvider, SoundEffects, SpeechBubbleController
 
 PADDING = 12
@@ -313,7 +316,7 @@ class SettingsDialog(QDialog):
             "随 ChatGPT/Codex 启动（登录后监听主程序）"
         )
         self.autostart.setChecked(launch_agent_enabled())
-        self.motion = QCheckBox("自主移动（重力与碰撞）")
+        self.motion = QCheckBox("自主移动（随机散步与休息）")
         self.motion.setChecked(bool(settings.get("motion_enabled", False)))
         self.sounds = QCheckBox("启用音效与语音气泡")
         self.sounds.setChecked(bool(settings.get("sound_enabled", False)))
@@ -323,13 +326,49 @@ class SettingsDialog(QDialog):
         form.addRow("字幕大小", size_row)
         form.addRow("字条长度", bar_row)
         form.addRow("", self.mini_mode)
-        form.addRow("", self.motion)
         form.addRow("", self.sounds)
         form.addRow("", self.menu_bar_icon)
         form.addRow("菜单栏图标", icon_row)
         form.addRow("", self.auto_hide)
         form.addRow("", self.autostart)
-        layout.addLayout(form)
+        tabs = QTabWidget()
+        appearance = QWidget()
+        appearance.setLayout(form)
+        tabs.addTab(appearance, "外观与其他")
+        behavior = QWidget()
+        behavior_form = QFormLayout(behavior)
+        behavior_form.addRow(self.motion)
+        self.behavior_controls = {}
+        labels = {
+            "activity_frequency": ("活动频率", "%", "越高越常选择新动作；100% 为标准。"),
+            "walking_frequency": ("散步比例", "%", "选择新动作时散步所占的比例；0% 只做原地动作。"),
+            "walking_speed": ("散步速度", " px/s", "每次散步在此速度上下随机浮动 20%，与动作倍速独立。"),
+            "walking_distance": ("最远散步距离", " px", "每次随机选择附近目的地，不超过此距离。"),
+            "pause_min": ("最短休息", " 秒", "两次自主动作之间的随机休息范围；在动画循环结束时切换。"),
+            "pause_max": ("最长休息", " 秒", "休息结束后也可能继续放松，因此不会强制连续走动。"),
+        }
+        for key, (low, high, default) in BEHAVIOR_RANGES.items():
+            label, suffix, tooltip = labels[key]
+            control = QSpinBox()
+            control.setRange(low, high)
+            control.setValue(int(settings.get(key, default)))
+            control.setSuffix(suffix)
+            control.setToolTip(tooltip)
+            control.setAccessibleName(label)
+            self.behavior_controls[key] = control
+            behavior_form.addRow(label, control)
+        minimum = self.behavior_controls["pause_min"]
+        maximum = self.behavior_controls["pause_max"]
+        minimum.valueChanged.connect(lambda value: maximum.setValue(max(value, maximum.value())))
+        maximum.valueChanged.connect(lambda value: minimum.setValue(min(value, minimum.value())))
+        for key in ("walking_frequency", "walking_speed", "walking_distance", "pause_min", "pause_max"):
+            self.behavior_controls[key].setEnabled(self.motion.isChecked())
+            self.motion.toggled.connect(self.behavior_controls[key].setEnabled)
+        note = QLabel("移动时只播放走路动作；坐下、放松和互动时保持原地。\n活动频率也适用于菜单中的自动动作。")
+        note.setWordWrap(True)
+        behavior_form.addRow(note)
+        tabs.addTab(behavior, "动作与移动")
+        layout.addWidget(tabs)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
@@ -374,6 +413,7 @@ class SettingsDialog(QDialog):
     def values(self) -> dict[str, Any]:
         """Returns values selected by the user."""
         return {
+            **{key: control.value() for key, control in self.behavior_controls.items()},
             "speed": self.speed_combo.currentData(),
             "subtitle_length": self.subtitle_combo.currentData(),
             "subtitle_size": self.subtitle_size.value(),
@@ -431,8 +471,11 @@ class PetWindow(QWidget):
         self.physics_timer.setInterval(50)
         self.physics_timer.timeout.connect(self.update_physics)
         self.physics_timer.start()
+        self._wander = WanderMotion()
+        self._walk_flipped: bool | None = None
         self._physics_body: PhysicsBody | None = None
         self._physics_clock = time.monotonic()
+        self.configure_behavior()
 
         self.pet: PetEntry
         self.manifest: dict[str, Any]
@@ -459,6 +502,7 @@ class PetWindow(QWidget):
         self.apply_auto_animations(
             bool(self.settings.get(AUTO_ANIMATIONS_KEY, False))
         )
+        self.apply_motion(bool(self.settings.get("motion_enabled", False)))
         self.refresh_status()
 
     @property
@@ -558,28 +602,65 @@ class PetWindow(QWidget):
         self.settings["opacity"] = self.opacity
         save_settings(settings_path(), self.settings)
 
+    def configure_behavior(self) -> None:
+        policy = self.animation_policy
+        for key in ("activity_frequency", "walking_frequency", "pause_min", "pause_max"):
+            setattr(policy, key, self.settings.get(key, BEHAVIOR_RANGES[key][2]))
+        self._wander.max_distance = self.settings.get("walking_distance", 160)
+        self._wander.base_speed = self.settings.get("walking_speed", 24)
+        self._stop_walking()
+        policy.finish_walk()
+
+    def apply_motion(self, enabled: bool) -> None:
+        if self.animation_policy.motion_enabled == bool(enabled):
+            return
+        self._stop_walking()
+        self._apply_policy_transition(self.animation_policy.set_motion_enabled(enabled))
+
+    def _stop_walking(self) -> None:
+        self._wander.stop()
+        self._physics_body = None
+        self._walk_flipped = None
+
     def update_physics(self) -> None:
-        """Advances optional motion with a capped elapsed interval."""
+        """Move only during an autonomous walk, preserving the user's height."""
         now = time.monotonic()
         dt = min(0.1, max(0.0, now - self._physics_clock))
         self._physics_clock = now
-        if not bool(self.settings.get("motion_enabled", False)) or not self.isVisible() or self.dragging:
+        if (not bool(self.settings.get("motion_enabled", False))
+                or not self.animation_policy.motion_enabled
+                or not self.isVisible() or self.dragging
+                or self.animation_policy.override_active
+                or self.state != "move"
+                or "move" not in available_states(self.manifest, self.group)):
+            self._stop_walking()
+            return
+        if self.animation_policy.walk_finished:
             return
         screens = self._screens()
         if not screens:
+            self._stop_walking()
             return
-        bounds = next((screen for screen in screens if screen.x <= self.x() <= screen.right), screens[0])
-        body = self._physics_body or PhysicsBody(self.x(), self.y(), self.width(), self.height())
-        body.x, body.y, body.width, body.height = self.x(), self.y(), self.width(), self.height()
-        walking = bool(self.settings.get("motion_enabled", False)) and self.state == "move"
-        body.step(dt, bounds, gravity=420.0, walk_speed=18.0 if walking else 0.0)
-        self._physics_body = body
-        peers = [candidate._physics_body for candidate in getattr(self.controller, "windows", {}).values()
-                 if candidate is not self and candidate._physics_body is not None]
-        if peers:
-            repel_bodies([body, *peers], bounds=bounds)
-        if (round(body.x), round(body.y)) != (self.x(), self.y()):
-            self.move(round(body.x), round(body.y))
+        pet_rect = Rect(self.x(), self.y(), self.width(), self.height())
+        bounds = max(screens, key=lambda screen: intersection_area(pet_rect, screen))
+        body = self._physics_body
+        if body is None:
+            body = PhysicsBody(self.x(), self.y(), self.width(), self.height())
+            self._physics_body = body
+            if not self._wander.begin(body, bounds):
+                self._apply_policy_transition(self.animation_policy.finish_walk())
+                return
+            self._walk_flipped = self._wander.speed < 0
+        elif (round(body.x), round(body.y)) != (self.x(), self.y()):
+            # A drag/display change invalidates the destination; do not snap back.
+            self._stop_walking()
+            self._apply_policy_transition(self.animation_policy.finish_walk())
+            return
+        arrived = self._wander.step(body, bounds, dt)
+        if round(body.x) != self.x():
+            self.move(round(body.x), self.y())
+        if arrived:
+            self._apply_policy_transition(self.animation_policy.finish_walk())
 
     def toggle_flip(self) -> None:
         self.flipped = not self.flipped
@@ -616,6 +697,7 @@ class PetWindow(QWidget):
         """Switches animation state when supported by the active pet."""
         if resolve_animation(self.manifest, name, self.group) is None:
             return
+        self._stop_walking()
         self.state = name
         self.hold_state = hold
         self.frame_index = 0
@@ -723,7 +805,8 @@ class PetWindow(QWidget):
         status_height = STATUS_HEIGHT if self.show_status else 0
         if not image.isNull():
             painter.save()
-            if self.flipped:
+            flipped = self.flipped if self._walk_flipped is None else self._walk_flipped
+            if flipped:
                 painter.translate(self.width(), 0)
                 painter.scale(-1, 1)
             painter.drawImage(
@@ -832,6 +915,7 @@ class PetWindow(QWidget):
         """Selects an exported animation group without rewriting assets."""
         if group not in animation_groups(self.manifest):
             return
+        self._stop_walking()
         self.group = group
         self.frame_index = 0
         self.animation_policy.set_available_states(available_states(self.manifest, group))
@@ -1297,6 +1381,8 @@ class DeskpetController:
         for window in getattr(self, "windows", {self.window: self.window}).values():
             window.sound_effects.set_enabled(bool(values["sound_enabled"]))
             window.speech.set_enabled(bool(values["sound_enabled"]))
+            window.configure_behavior()
+            window.apply_motion(bool(values["motion_enabled"]))
             window.speed = float(values["speed"])
             window.animation_timer.setInterval(window.tick_ms())
             window.apply_geometry()
