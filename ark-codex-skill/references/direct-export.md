@@ -1,7 +1,7 @@
 # Direct PRTS export
 
 `scripts/export_pet.py` is the primary route. Run its `--help` for arguments.
-An output directory must be new; working pets are never overwritten by rendering.
+With no `--group`, the output directory must be new; working pets are never overwritten by rendering. `--group NAME` enables additive export into an existing package and preserves unrelated groups and flat states.
 The final `pet/` directory is the installable package; `assets/`, `runtime/`,
 `preflight.png` and `export.json` retain provenance outside the runtime pet.
 When a PRTS page is blocked but its published model ID is known, pass `--model-id` (for example, `--model-id char_4217_makoto`) to read the official CDN metadata directly.
@@ -27,6 +27,16 @@ When a PRTS page is blocked but its published model ID is known, pass `--model-i
    be valid; inspect more than the first frame.
 6. **Install:** validate `pet/`, then use `install_pet_macos.py`. Optional Special
    has the same manifest/PNG checks as the five required states.
+
+## Grouped exports
+
+Use `--group base`, `--group front`, or `--group back` for separate animation
+sets. Grouped frames are written to `pet/frames/<group>/<state>/frame_N.png` and
+the manifest records `groups[<group>][<state>]` plus that group's `fps`. Existing
+groups remain untouched. The renderer accepts 20 or 60 FPS with `--fps`; the
+default is 20. A grouped set may advertise additional actions beyond the five
+base states, but every advertised action must have a finite positive duration
+and its frames must be present before installation.
 
 ## Reproduce with local assets
 

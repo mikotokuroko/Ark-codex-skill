@@ -7,7 +7,7 @@ DEFAULT_PET = "予愿安洁莉娜"
 REQUIRED_STATES = ("idle", "interact", "move", "sit", "sleep")
 IPC_COMMANDS = ("show", "hide", "shutdown", "refresh-library")
 IPC_SERVER_NAME = "com.astrariax.arkcodexdeskpet.command"
-SETTINGS_VERSION = 2
+SETTINGS_VERSION = 3
 AUTO_ANIMATIONS_KEY = "auto_animations"
 
 DEFAULT_SETTINGS = {
@@ -28,4 +28,11 @@ DEFAULT_SETTINGS = {
     "autostart_with_codex": False,
     AUTO_ANIMATIONS_KEY: False,
     "user_hidden": False,
+    "motion_enabled": False,
+    "sound_enabled": False,
+    "sound_volume": 50,
+    "opacity": 1.0,
+    "flipped": False,
+    "click_through": False,
+    "instance_states": {},
 }

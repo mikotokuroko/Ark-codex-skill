@@ -24,6 +24,8 @@ from PySide6.QtGui import (
     QPalette,
     QPixmap,
 )
+import uuid
+
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -31,6 +33,8 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFileDialog,
+    QPushButton,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -56,7 +60,15 @@ from .launch_agent import (
     enable_launch_agent,
     launch_agent_enabled,
 )
-from .manifest import ManifestError, PetEntry, merge_pet_libraries
+from .manifest import (
+    ManifestError,
+    PetEntry,
+    animation_groups,
+    available_states,
+    merge_pet_libraries,
+    resolve_animation,
+    group_fps,
+)
 from .paths import (
     app_bundle_path,
     bundled_pets_dir,
@@ -76,6 +88,8 @@ from .storage import (
     load_settings,
     save_settings,
 )
+from .runtime import PhysicsBody, repel_bodies
+from .effects import DialogueProvider, SoundEffects, SpeechBubbleController
 
 PADDING = 12
 STATUS_HEIGHT = 46
@@ -141,8 +155,20 @@ ANIMATION_LABELS = (
     ("special", "特殊/special"),
 )
 MENU_ICON_RESOURCE = Path("resources") / "ark-codex-tray.webp"
+FRAME_CACHE_BYTES = 160 * 1024 * 1024
 MENU_ICON_SIZE = 22
 MENU_ICON_DEVICE_PIXEL_RATIOS = (1, 2, 3)
+
+
+def _set_native_ignores_mouse_events(widget: QWidget, enabled: bool) -> None:
+    """Apply native click-through only to a live Cocoa window."""
+    if QApplication.platformName().lower() != "cocoa":
+        return
+    if not widget.testAttribute(Qt.WA_WState_Created):
+        return
+    import objc
+    native = objc.objc_object(c_void_p=int(widget.winId()))
+    native.window().setIgnoresMouseEvents_(bool(enabled))
 
 
 def configure_logging() -> None:
@@ -186,10 +212,12 @@ def _fallback_menu_icon() -> QIcon:
     return icon
 
 
-def make_menu_icon() -> QIcon:
+def make_menu_icon(custom_path: str | None = None) -> QIcon:
     """Loads the supplied character image as a color-preserving tray icon."""
-    image_path = resource_root() / MENU_ICON_RESOURCE
+    image_path = Path(custom_path) if custom_path else resource_root() / MENU_ICON_RESOURCE
     image = QImage(str(image_path))
+    if image.isNull() and custom_path:
+        return make_menu_icon()
     if image.isNull():
         logging.getLogger(__name__).warning(
             "Unable to load tray icon resource: %s", image_path
@@ -265,16 +293,40 @@ class SettingsDialog(QDialog):
         self.auto_hide.setChecked(
             bool(settings.get("auto_hide_fullscreen"))
         )
+        self.menu_bar_icon = QCheckBox("显示菜单栏图标")
+        self.menu_bar_icon.setChecked(bool(settings.get("show_menu_bar_icon", True)))
+        self.custom_icon_path = settings.get("menu_bar_icon_path", "")
+        self.pending_icon = None
+        icon_row = QWidget()
+        icon_layout = QHBoxLayout(icon_row)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        self.icon_preview = QLabel()
+        self.icon_preview.setPixmap(make_menu_icon(self.custom_icon_path).pixmap(32, 32))
+        choose_icon = QPushButton("更换图标…")
+        choose_icon.clicked.connect(self.choose_menu_icon)
+        reset_icon = QPushButton("恢复默认")
+        reset_icon.clicked.connect(self.reset_menu_icon)
+        icon_layout.addWidget(self.icon_preview)
+        icon_layout.addWidget(choose_icon)
+        icon_layout.addWidget(reset_icon)
         self.autostart = QCheckBox(
             "随 ChatGPT/Codex 启动（登录后监听主程序）"
         )
         self.autostart.setChecked(launch_agent_enabled())
+        self.motion = QCheckBox("自主移动（重力与碰撞）")
+        self.motion.setChecked(bool(settings.get("motion_enabled", False)))
+        self.sounds = QCheckBox("启用音效与语音气泡")
+        self.sounds.setChecked(bool(settings.get("sound_enabled", False)))
 
         form.addRow("动作倍速", self.speed_combo)
         form.addRow("字幕长度", self.subtitle_combo)
         form.addRow("字幕大小", size_row)
         form.addRow("字条长度", bar_row)
         form.addRow("", self.mini_mode)
+        form.addRow("", self.motion)
+        form.addRow("", self.sounds)
+        form.addRow("", self.menu_bar_icon)
+        form.addRow("菜单栏图标", icon_row)
         form.addRow("", self.auto_hide)
         form.addRow("", self.autostart)
         layout.addLayout(form)
@@ -285,6 +337,26 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def choose_menu_icon(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "选择菜单栏图标", "", "图片 (*.png *.webp *.jpg *.jpeg *.ico *.bmp)"
+        )
+        if not filename:
+            return
+        image = QImage(filename)
+        if image.isNull():
+            QMessageBox.warning(self, "无法读取图片", "请选择有效的 PNG、WebP 或 JPEG 图片。")
+            return
+        self.pending_icon = image.scaled(256, 256, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.icon_preview.setPixmap(QPixmap.fromImage(self.pending_icon).scaled(
+            32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.menu_bar_icon.setChecked(True)
+
+    def reset_menu_icon(self) -> None:
+        self.pending_icon = None
+        self.custom_icon_path = ""
+        self.icon_preview.setPixmap(make_menu_icon().pixmap(32, 32))
 
     @staticmethod
     def _slider_row(slider: QSlider, suffix: str) -> tuple[QWidget, QLabel]:
@@ -307,17 +379,21 @@ class SettingsDialog(QDialog):
             "subtitle_size": self.subtitle_size.value(),
             "bar_length": self.bar_length.value(),
             "mini_mode": self.mini_mode.isChecked(),
+            "show_menu_bar_icon": self.menu_bar_icon.isChecked(),
             "auto_hide_fullscreen": self.auto_hide.isChecked(),
             "autostart_with_codex": self.autostart.isChecked(),
+            "motion_enabled": self.motion.isChecked(),
+            "sound_enabled": self.sounds.isChecked(),
         }
 
 
 class PetWindow(QWidget):
     """Transparent animated desktop-pet window."""
 
-    def __init__(self, controller: "DeskpetController") -> None:
+    def __init__(self, controller: "DeskpetController", instance_key: str = "primary") -> None:
         super().__init__()
         self.controller = controller
+        self.instance_key = instance_key
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
@@ -327,6 +403,7 @@ class PetWindow(QWidget):
         self.setMouseTracking(True)
 
         self.state = "idle"
+        self.group = "default"
         self.frame_index = 0
         self.hold_state = False
         self.cache: dict[int, QImage] = {}
@@ -350,11 +427,34 @@ class PetWindow(QWidget):
         self.fullscreen_timer.setInterval(2000)
         self.fullscreen_timer.timeout.connect(self.check_fullscreen)
         self.fullscreen_timer.start()
+        self.physics_timer = QTimer(self)
+        self.physics_timer.setInterval(50)
+        self.physics_timer.timeout.connect(self.update_physics)
+        self.physics_timer.start()
+        self._physics_body: PhysicsBody | None = None
+        self._physics_clock = time.monotonic()
 
         self.pet: PetEntry
         self.manifest: dict[str, Any]
         self.scale = 1.0
         self.speed = 1.0
+        self.flipped = bool(self.settings.get("flipped", False))
+        self.opacity = float(self.settings.get("opacity", 1.0))
+        self.click_through = bool(self.settings.get("click_through", False))
+        self.fullscreen_hidden = False
+        self.sound_effects = SoundEffects(
+            cache_dir(), enabled=bool(self.settings.get("sound_enabled", False)),
+            volume=int(self.settings.get("sound_volume", 50)),
+        )
+        self.dialogue = DialogueProvider(cache_dir())
+        self.speech = SpeechBubbleController(self, enabled=bool(self.settings.get("sound_enabled", False)))
+        self.setWindowOpacity(max(0.15, min(1.0, self.opacity)))
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, self.click_through)
+        if QApplication.platformName().lower() == "cocoa":
+            try:
+                _set_native_ignores_mouse_events(self, self.click_through)
+            except (ImportError, AttributeError, ValueError):
+                logging.getLogger(__name__).debug("native click-through unavailable", exc_info=True)
         self.load_pet(controller.active_pet_name, recover=True)
         self.apply_auto_animations(
             bool(self.settings.get(AUTO_ANIMATIONS_KEY, False))
@@ -369,11 +469,14 @@ class PetWindow(QWidget):
     def showEvent(self, event: object) -> None:
         """Keeps the pet above windows from other macOS applications."""
         super().showEvent(event)
+        if QApplication.platformName().lower() != "cocoa":
+            return
         import AppKit
         import objc
 
         native_view = objc.objc_object(c_void_p=int(self.winId()))
         native_view.window().setLevel_(AppKit.NSFloatingWindowLevel)
+        _set_native_ignores_mouse_events(self, self.click_through)
 
     @property
     def show_status(self) -> bool:
@@ -388,7 +491,7 @@ class PetWindow(QWidget):
 
     def tick_ms(self) -> int:
         """Returns the animation interval after speed scaling."""
-        fps = float(self.manifest.get("fps", 20))
+        fps = group_fps(self.manifest, self.group)
         return max(10, int(round(1000.0 / fps / self.speed)))
 
     def load_pet(self, name: str, recover: bool = True) -> None:
@@ -401,12 +504,22 @@ class PetWindow(QWidget):
         manifest = validate_manifest(entry.path)
         if hasattr(self, "pet"):
             self.save_pet_state()
+        state_key = name if self.instance_key == "primary" else f"{name}#{self.instance_key}"
+        pet_state = self.settings.get("pet_states", {}).get(state_key, {})
         self.pet = entry
         self.manifest = manifest
-        self.animation_policy.set_available_states(manifest["states"])
+        groups = animation_groups(manifest)
+        saved_group = str(pet_state.get("group", "default"))
+        self.group = saved_group if saved_group in groups else next(iter(groups))
+        self.animation_policy.set_available_states(available_states(manifest, self.group))
         self.controller.active_pet_name = name
-        self.settings["pet"] = name
-        pet_state = self.settings.get("pet_states", {}).get(name, {})
+        if self.instance_key == "primary":
+            self.settings["pet"] = name
+        self.flipped = bool(pet_state.get("flipped", self.flipped))
+        self.opacity = float(pet_state.get("opacity", self.opacity))
+        self.click_through = bool(pet_state.get("click_through", self.click_through))
+        self.setWindowOpacity(max(0.15, min(1.0, self.opacity)))
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, self.click_through)
         self.scale = max(
             MIN_SCALE,
             min(
@@ -419,7 +532,7 @@ class PetWindow(QWidget):
         )
         self.cache.clear()
         policy_state = getattr(self.animation_policy, "state", "idle")
-        if policy_state not in self.manifest["states"]:
+        if policy_state not in available_states(self.manifest, self.group):
             policy_state = "idle"
         self.set_state(
             policy_state,
@@ -439,6 +552,55 @@ class PetWindow(QWidget):
             self.show()
         self.update()
 
+    def set_opacity(self, value: float) -> None:
+        self.opacity = max(0.15, min(1.0, float(value)))
+        self.setWindowOpacity(self.opacity)
+        self.settings["opacity"] = self.opacity
+        save_settings(settings_path(), self.settings)
+
+    def update_physics(self) -> None:
+        """Advances optional motion with a capped elapsed interval."""
+        now = time.monotonic()
+        dt = min(0.1, max(0.0, now - self._physics_clock))
+        self._physics_clock = now
+        if not bool(self.settings.get("motion_enabled", False)) or not self.isVisible() or self.dragging:
+            return
+        screens = self._screens()
+        if not screens:
+            return
+        bounds = next((screen for screen in screens if screen.x <= self.x() <= screen.right), screens[0])
+        body = self._physics_body or PhysicsBody(self.x(), self.y(), self.width(), self.height())
+        body.x, body.y, body.width, body.height = self.x(), self.y(), self.width(), self.height()
+        walking = bool(self.settings.get("motion_enabled", False)) and self.state == "move"
+        body.step(dt, bounds, gravity=420.0, walk_speed=18.0 if walking else 0.0)
+        self._physics_body = body
+        peers = [candidate._physics_body for candidate in getattr(self.controller, "windows", {}).values()
+                 if candidate is not self and candidate._physics_body is not None]
+        if peers:
+            repel_bodies([body, *peers], bounds=bounds)
+        if (round(body.x), round(body.y)) != (self.x(), self.y()):
+            self.move(round(body.x), round(body.y))
+
+    def toggle_flip(self) -> None:
+        self.flipped = not self.flipped
+        self.settings["flipped"] = self.flipped
+        save_settings(settings_path(), self.settings)
+        self.update()
+
+    def toggle_click_through(self) -> None:
+        self.set_click_through(not self.click_through)
+
+    def set_click_through(self, enabled: bool) -> None:
+        self.click_through = bool(enabled)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, self.click_through)
+        if QApplication.platformName().lower() == "cocoa":
+            try:
+                _set_native_ignores_mouse_events(self, self.click_through)
+            except (ImportError, AttributeError, ValueError):
+                logging.getLogger(__name__).debug("native click-through unavailable", exc_info=True)
+        self.settings["click_through"] = self.click_through
+        self.save_pet_state()
+
     def _screens(self) -> list[Rect]:
         return [
             Rect(
@@ -452,7 +614,7 @@ class PetWindow(QWidget):
 
     def set_state(self, name: str, hold: bool = False) -> None:
         """Switches animation state when supported by the active pet."""
-        if name not in self.manifest["states"]:
+        if resolve_animation(self.manifest, name, self.group) is None:
             return
         self.state = name
         self.hold_state = hold
@@ -475,7 +637,7 @@ class PetWindow(QWidget):
 
     def play_one_shot(self, state: str) -> None:
         """Plays one complete manual animation and then resumes policy mode."""
-        if state not in self.manifest["states"]:
+        if resolve_animation(self.manifest, state, self.group) is None:
             return
         transition = self.animation_policy.start_override(state)
         self._apply_policy_transition(transition)
@@ -484,7 +646,10 @@ class PetWindow(QWidget):
         """Crops the transparent window around the current animation bbox."""
         old_x, old_y = self.x(), self.y()
         old_width, old_height = self.width(), self.height()
-        bbox = self.manifest["states"][self.state]["bbox"]
+        animation = resolve_animation(self.manifest, self.state, self.group)
+        if animation is None:
+            return
+        bbox = animation.info["bbox"]
         width = int((bbox[2] - bbox[0] + 1) * self.scale) + PADDING * 2
         status_height = STATUS_HEIGHT if self.show_status else 0
         height = (
@@ -501,28 +666,36 @@ class PetWindow(QWidget):
 
     def frame_path(self) -> Path:
         """Returns the current PNG frame path."""
-        return (
-            self.pet.path
-            / "frames"
-            / self.state
-            / f"frame_{self.frame_index:04d}.png"
-        )
+        animation = resolve_animation(self.manifest, self.state, self.group)
+        frame_root = self.pet.path / "frames"
+        if "groups" in self.manifest:
+            frame_root /= self.group
+        return frame_root / (animation.frame_state if animation else self.state) / f"frame_{self.frame_index:04d}.png"
 
     def current_image(self) -> QImage:
-        """Loads the current frame with a small in-memory cache."""
+        """Caches cropped frames so animation loops avoid repeated PNG decoding."""
         cached = self.cache.get(self.frame_index)
         if cached is not None:
             return cached
         image = QImage(str(self.frame_path()))
         if not image.isNull():
-            if len(self.cache) > 6:
-                self.cache.clear()
-            self.cache[self.frame_index] = image
+            animation = resolve_animation(self.manifest, self.state, self.group)
+            if animation is not None:
+                left, top, right, bottom = animation.info["bbox"]
+                image = image.copy(left, top, right - left + 1, bottom - top + 1)
+            used = sum(frame.sizeInBytes() for frame in self.cache.values())
+            while self.cache and used + image.sizeInBytes() > FRAME_CACHE_BYTES:
+                used -= self.cache.pop(next(iter(self.cache))).sizeInBytes()
+            if image.sizeInBytes() <= FRAME_CACHE_BYTES:
+                self.cache[self.frame_index] = image
         return image
 
     def next_frame(self) -> None:
         """Advances the active animation at its configured frame rate."""
-        count = int(self.manifest["states"][self.state]["count"])
+        animation = resolve_animation(self.manifest, self.state, self.group)
+        if animation is None:
+            return
+        count = int(animation.info["count"])
         if self.frame_index >= count - 1:
             transition = self.animation_policy.on_animation_cycle_boundary()
             if transition is not None:
@@ -537,7 +710,10 @@ class PetWindow(QWidget):
     def paintEvent(self, event: object) -> None:
         """Paints the transparent animation and optional status strip."""
         del event
-        bbox = self.manifest["states"][self.state]["bbox"]
+        animation = resolve_animation(self.manifest, self.state, self.group)
+        if animation is None:
+            return
+        bbox = animation.info["bbox"]
         image = self.current_image()
         painter = QPainter(self)
         painter.setCompositionMode(QPainter.CompositionMode_Source)
@@ -546,15 +722,20 @@ class PetWindow(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         status_height = STATUS_HEIGHT if self.show_status else 0
         if not image.isNull():
+            painter.save()
+            if self.flipped:
+                painter.translate(self.width(), 0)
+                painter.scale(-1, 1)
             painter.drawImage(
                 QRectF(
-                    PADDING - bbox[0] * self.scale,
-                    status_height + PADDING - bbox[1] * self.scale,
+                    PADDING,
+                    status_height + PADDING,
                     image.width() * self.scale,
                     image.height() * self.scale,
                 ),
                 image,
             )
+            painter.restore()
         if self.show_status:
             bar_width = max(
                 120,
@@ -621,6 +802,9 @@ class PetWindow(QWidget):
             self.save_pet_state()
         elif elapsed < 0.5 and delta.manhattanLength() <= 6:
             self.play_one_shot("interact")
+            if bool(self.settings.get("sound_enabled", False)):
+                self.sound_effects.play("click")
+                self.speech.show(self.dialogue.lines(self.pet.name)[0])
 
     def mouseDoubleClickEvent(self, event: Any) -> None:
         """Toggles mini mode on a left-button double click."""
@@ -633,9 +817,10 @@ class PetWindow(QWidget):
 
     def add_animation_actions(self, menu: QMenu) -> None:
         """Adds bilingual actions for animations in the active manifest."""
-        states = self.manifest.get("states", {})
-        for state, label in ANIMATION_LABELS:
-            if state in states:
+        labels = dict(ANIMATION_LABELS)
+        for state in available_states(self.manifest, self.group):
+            label = labels.get(state, state)
+            if resolve_animation(self.manifest, state, self.group) is not None:
                 menu.addAction(
                     label,
                     lambda checked=False, state=state: self.play_one_shot(
@@ -643,10 +828,38 @@ class PetWindow(QWidget):
                     ),
                 )
 
+    def set_group(self, group: str) -> None:
+        """Selects an exported animation group without rewriting assets."""
+        if group not in animation_groups(self.manifest):
+            return
+        self.group = group
+        self.frame_index = 0
+        self.animation_policy.set_available_states(available_states(self.manifest, group))
+        if self.state not in available_states(self.manifest, group):
+            self.state = "idle"
+        self.cache.clear()
+        self.apply_geometry()
+        self.animation_timer.setInterval(self.tick_ms())
+        self.save_pet_state()
+        self.update()
+
     def build_context_menu(self) -> QMenu:
         """Builds the pet context menu for display or UI smoke tests."""
         menu = QMenu(self)
         self.add_animation_actions(menu)
+        groups = animation_groups(self.manifest)
+        if len(groups) > 1:
+            group_menu = menu.addMenu("动画组 / groups")
+            group_actions = QActionGroup(group_menu)
+            group_actions.setExclusive(True)
+            for group_name in groups:
+                action = group_menu.addAction(group_name)
+                action.setCheckable(True)
+                action.setChecked(group_name == self.group)
+                action.triggered.connect(
+                    lambda checked=False, group_name=group_name: self.set_group(group_name)
+                )
+                group_actions.addAction(action)
         library = menu.addMenu("桌宠库")
         group = QActionGroup(library)
         group.setExclusive(True)
@@ -655,7 +868,7 @@ class PetWindow(QWidget):
             action.setCheckable(True)
             action.setChecked(name == self.pet.name)
             action.triggered.connect(
-                lambda checked=False, name=name: self.controller.select_pet(name)
+                lambda checked=False, name=name: self.controller.select_pet(name, self)
             )
             group.addAction(action)
         menu.addSeparator()
@@ -686,6 +899,11 @@ class PetWindow(QWidget):
         menu.addAction("设置…", self.controller.open_settings)
         menu.addAction("放大", lambda: self.set_scale(self.scale + 0.1))
         menu.addAction("缩小", lambda: self.set_scale(self.scale - 0.1))
+        menu.addAction("翻转朝向", self.toggle_flip)
+        click_through = menu.addAction("点击穿透")
+        click_through.setCheckable(True)
+        click_through.setChecked(self.click_through)
+        click_through.triggered.connect(self.toggle_click_through)
         menu.addSeparator()
         menu.addAction("隐藏桌宠", self.controller.hide_pet)
         menu.addAction("退出", self.controller.quit)
@@ -725,8 +943,8 @@ class PetWindow(QWidget):
         if self.controller.user_hidden:
             return
         if not bool(self.settings.get("auto_hide_fullscreen")):
-            if self.controller.fullscreen_hidden:
-                self.controller.fullscreen_hidden = False
+            if self.fullscreen_hidden:
+                self.fullscreen_hidden = False
                 self.show()
             return
         pet_rect = Rect(self.x(), self.y(), self.width(), self.height())
@@ -734,21 +952,31 @@ class PetWindow(QWidget):
             pet_rect, self._screens()
         )
         if result is True and self.isVisible():
-            self.controller.fullscreen_hidden = True
+            self.fullscreen_hidden = True
             self.hide()
-        elif result is False and self.controller.fullscreen_hidden:
-            self.controller.fullscreen_hidden = False
+        elif result is False and self.fullscreen_hidden:
+            self.fullscreen_hidden = False
             self.show()
 
     def save_pet_state(self) -> None:
         """Persists position, scale, and speed for the active character."""
         pet_states = self.settings.setdefault("pet_states", {})
-        pet_states[self.pet.name] = {
+        state_key = self.pet.name if self.instance_key == "primary" else f"{self.pet.name}#{self.instance_key}"
+        pet_states[state_key] = {
             "scale": self.scale,
             "speed": self.speed,
+            "group": self.group,
             "pos_x": self.x(),
             "pos_y": self.y(),
             "selected": True,
+            "opacity": self.opacity,
+            "flipped": self.flipped,
+            "click_through": self.click_through,
+        }
+        self.settings.setdefault("instance_states", {})[self.instance_key] = {
+            "pet": self.pet.name,
+            "state_key": state_key,
+            "visible": self.isVisible(),
         }
         self.settings.update(
             {
@@ -844,16 +1072,61 @@ class DeskpetController:
         self.user_hidden = bool(self.settings.get("user_hidden"))
         self.fullscreen_hidden = False
         self.fullscreen_detector = FullscreenDetector()
+        self.windows: dict[str, PetWindow] = {}
         self.refresh_library(create_window=False)
-        self.window = PetWindow(self)
-        self.app.aboutToQuit.connect(self.window.save_pet_state)
-        self.tray = QSystemTrayIcon(make_menu_icon(), self.app)
+        self.window = PetWindow(self, "primary")
+        self.windows["primary"] = self.window
+        self.app.aboutToQuit.connect(self.save_all_states)
+        self.tray = QSystemTrayIcon(make_menu_icon(self.settings.get("menu_bar_icon_path")), self.app)
         self.tray.setToolTip("Ark Codex 桌宠")
         self.tray.activated.connect(self._tray_activated)
         self._build_tray_menu()
-        self.tray.show()
+        for instance_id, record in list(self.settings.get("instance_states", {}).items()):
+            if instance_id == "primary" or not isinstance(record, dict):
+                continue
+            pet_name = record.get("pet")
+            if pet_name in self.library:
+                self.add_pet_instance(str(pet_name), instance_id=str(instance_id))
+        self.tray.setVisible(bool(self.settings.get("show_menu_bar_icon", True)))
         if not self.user_hidden:
             self.window.show()
+
+    def save_all_states(self) -> None:
+        """Persists every live copy before the app exits."""
+        for window in tuple(self.windows.values()):
+            window.save_pet_state()
+
+    def add_pet_instance(self, name: str | None = None, instance_id: str | None = None) -> PetWindow:
+        """Creates an independent copy sharing the controller's library/status."""
+        chosen = name if name in self.library else self.active_pet_name
+        used = set(self.windows)
+        key = instance_id or f"pet-{len(self.windows) + 1}"
+        suffix = len(used) + 1
+        while key in used:
+            suffix += 1
+            key = f"pet-{suffix}"
+        window = PetWindow(self, key)
+        window.load_pet(chosen, recover=True)
+        if instance_id is None:
+            window.move(window.x() + 32 * len(self.windows), window.y())
+        self.windows[key] = window
+        if not self.user_hidden:
+            window.show()
+        return window
+
+    def remove_pet_instance(self, window: PetWindow) -> None:
+        """Closes a secondary copy while keeping the tray and primary alive."""
+        if window is self.window or len(self.windows) <= 1:
+            return
+        window.save_pet_state()
+        for key, candidate in tuple(self.windows.items()):
+            if candidate is window:
+                self.windows.pop(key, None)
+                self.settings.get("instance_states", {}).pop(key, None)
+                save_settings(settings_path(), self.settings)
+                break
+        window.close()
+        window.deleteLater()
 
     def refresh_library(self, create_window: bool = True) -> None:
         """Reloads bundled and user pets, honoring user overrides."""
@@ -867,9 +1140,10 @@ class DeskpetController:
             requested if requested in self.library else next(iter(self.library))
         )
         if create_window and hasattr(self, "window"):
-            current_name = self.window.pet.name
-            target = current_name if current_name in self.library else self.active_pet_name
-            self.window.load_pet(target, recover=False)
+            for window in self.windows.values():
+                current_name = window.pet.name
+                target = current_name if current_name in self.library else self.active_pet_name
+                window.load_pet(target, recover=False)
             self._build_tray_menu()
 
     def _build_tray_menu(self) -> None:
@@ -888,6 +1162,7 @@ class DeskpetController:
                 lambda checked=False, name=name: self.select_pet(name)
             )
             group.addAction(action)
+        menu.addAction("添加一只桌宠", lambda: self.add_pet_instance())
         animation_menu = menu.addMenu("动画/animations")
         self.window.add_animation_actions(animation_menu)
         language_menu = menu.addMenu("Language")
@@ -929,20 +1204,23 @@ class DeskpetController:
         self.fullscreen_hidden = False
         self.settings["user_hidden"] = False
         save_settings(settings_path(), self.settings)
-        self.window.show()
-        self.window.raise_()
+        for window in self.windows.values():
+            window.set_click_through(False)
+            window.show()
+            window.raise_()
 
     def hide_pet(self) -> None:
         """Hides the pet while leaving the status-menu icon active."""
         self.user_hidden = True
         self.settings["user_hidden"] = True
         save_settings(settings_path(), self.settings)
-        self.window.hide()
+        for window in self.windows.values():
+            window.hide()
 
-    def select_pet(self, name: str) -> None:
+    def select_pet(self, name: str, window: PetWindow | None = None) -> None:
         """Switches pets and rebuilds checked menu state."""
         try:
-            self.window.load_pet(name)
+            (window or self.window).load_pet(name)
         except ManifestError as error:
             QMessageBox.warning(self.window, APP_NAME, str(error))
             return
@@ -954,7 +1232,8 @@ class DeskpetController:
             return
         self.settings["language"] = language
         save_settings(settings_path(), self.settings)
-        self.window.refresh_status()
+        for window in getattr(self, "windows", {self.window: self.window}).values():
+            window.refresh_status()
         self._build_tray_menu()
 
     def set_auto_animations(self, enabled: bool) -> None:
@@ -962,7 +1241,8 @@ class DeskpetController:
         value = bool(enabled)
         self.settings[AUTO_ANIMATIONS_KEY] = value
         save_settings(settings_path(), self.settings)
-        self.window.apply_auto_animations(value)
+        for window in getattr(self, "windows", {self.window: self.window}).values():
+            window.apply_auto_animations(value)
         self._build_tray_menu()
 
     def watcher_executable(self) -> Path:
@@ -997,16 +1277,35 @@ class DeskpetController:
         if dialog.exec() != QDialog.Accepted:
             return
         values = dialog.values()
+        icon_path = dialog.custom_icon_path
+        if dialog.pending_icon is not None:
+            try:
+                icon_dir = settings_path().parent / "Icons"
+                icon_dir.mkdir(parents=True, exist_ok=True)
+                target = icon_dir / f"menu-{uuid.uuid4().hex}.png"
+                if not dialog.pending_icon.save(str(target), "PNG"):
+                    raise OSError("图片无法保存")
+                icon_path = str(target)
+            except OSError as error:
+                QMessageBox.warning(self.window, "无法保存图标", str(error))
+                return
+        values["menu_bar_icon_path"] = icon_path
         old_autostart = launch_agent_enabled()
         self.settings.update(values)
-        self.window.speed = float(values["speed"])
-        self.window.animation_timer.setInterval(self.window.tick_ms())
-        self.window.apply_geometry()
-        self.window.save_pet_state()
+        self.tray.setIcon(make_menu_icon(icon_path))
+        self.tray.setVisible(bool(values["show_menu_bar_icon"]))
+        for window in getattr(self, "windows", {self.window: self.window}).values():
+            window.sound_effects.set_enabled(bool(values["sound_enabled"]))
+            window.speech.set_enabled(bool(values["sound_enabled"]))
+            window.speed = float(values["speed"])
+            window.animation_timer.setInterval(window.tick_ms())
+            window.apply_geometry()
+            window.save_pet_state()
         if bool(values["autostart_with_codex"]) != old_autostart:
             self.set_autostart(bool(values["autostart_with_codex"]))
-        self.window.check_fullscreen()
-        self.window.update()
+        for window in getattr(self, "windows", {self.window: self.window}).values():
+            window.check_fullscreen()
+            window.update()
 
     def handle_command(self, command: str) -> None:
         """Dispatches one IPC command."""
@@ -1024,7 +1323,7 @@ class DeskpetController:
 
     def quit(self) -> None:
         """Saves state and terminates the complete app."""
-        self.window.save_pet_state()
+        self.save_all_states()
         self.tray.hide()
         self.app.quit()
 

@@ -7,10 +7,12 @@ import functools
 import http.server
 import json
 import os
+from pathlib import Path
 import shutil
 import socketserver
 import sys
 import threading
+import tempfile
 import urllib.parse
 
 try:
@@ -20,6 +22,7 @@ except ImportError:
 
 FPS = 20
 SIZE = 1000
+SUPPORTED_FPS = (20, 60)
 STATE_MAP = [
     ("Special", "special"),
     ("Relax", "idle"),
@@ -112,6 +115,49 @@ def pick_frames(count, duration, frames):
     return out
 
 
+def state_name(token):
+    known = dict(STATE_MAP)
+    if token in known:
+        return known[token]
+    state = ''.join(ch.lower() if ch.isalnum() else '_' for ch in token).strip('_')
+    if not state:
+        raise ValueError("animation name has no usable state")
+    return state
+
+
+def discover_state_files(src, group=None, operator=None):
+    """Discover all advertised WebM actions, retaining additional action names."""
+    state_files = {}
+    tokens = [token for token, _ in STATE_MAP]
+    for fname in sorted(os.listdir(src)):
+        if not fname.lower().endswith('.webm'):
+            continue
+        stem = os.path.splitext(fname)[0]
+        if operator and operator.lower() not in stem.lower():
+            continue
+        full = os.path.join(src, fname)
+        if os.path.getsize(full) < 1000:
+            if 'special' in fname.lower():
+                raise ValueError('advertised Special export is broken: ' + fname)
+            continue
+        parts = [p for p in stem.split('-') if p]
+        if parts and parts[-1].lower().startswith('x') and parts[-1][1:].isdigit():
+            parts.pop()
+        if group:
+            if group.lower() not in (p.lower() for p in parts):
+                continue
+            index = next(i for i, p in enumerate(parts) if p.lower() == group.lower())
+            parts = parts[index + 1:]
+        token = next((t for t in tokens if t.lower() in stem.lower()), None)
+        if group or token is None:
+            token = parts[-1] if parts else stem
+        state = state_name(token)
+        if state in state_files:
+            raise ValueError(f'duplicate animation state {state!r}: {fname} and {state_files[state]}')
+        state_files[state] = fname
+    return state_files
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
@@ -128,35 +174,46 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-def run(src, name, out):
-    pet_dir = out
+def ensure_group_layout(pet_dir, manifest):
+    if not isinstance(manifest.get('groups'), dict) and isinstance(manifest.get('states'), dict):
+        legacy = Path(pet_dir) / 'frames'
+        grouped = legacy / 'default'
+        if legacy.is_dir():
+            shutil.copytree(legacy, grouped, dirs_exist_ok=True)
+        manifest['groups'] = {'default': dict(manifest['states'])}
+
+
+def run(src, name, out, group=None, fps=FPS):
+    if fps not in SUPPORTED_FPS:
+        raise ValueError(f'FPS must be one of {SUPPORTED_FPS}, got {fps}')
+    if group and (os.path.basename(group) != group or group in {'.', '..'}):
+        raise ValueError(f'unsafe group name: {group!r}')
+    destination = Path(out).expanduser().resolve()
+    staging_root = None
+    if group:
+        staging_root = Path(tempfile.mkdtemp(prefix='.webm-export-', dir=destination.parent))
+        pet_dir = str(staging_root / 'pet')
+        if destination.exists():
+            shutil.copytree(destination, pet_dir, dirs_exist_ok=True)
+    else:
+        pet_dir = str(destination)
     frames_dir = os.path.join(pet_dir, "frames")
     webm_dir = os.path.join(pet_dir, "webm")
     os.makedirs(frames_dir, exist_ok=True)
     os.makedirs(webm_dir, exist_ok=True)
 
-    state_files = {}
-    for fname in sorted(os.listdir(src)):
-        if not fname.lower().endswith(".webm"):
-            continue
-        full = os.path.join(src, fname)
-        if os.path.getsize(full) < 1000:
-            if "special" in fname.lower():
-                sys.exit("advertised Special export is broken: " + fname)
-            print("skip broken webm:", fname)
-            continue
-        for token, state in STATE_MAP:
-            if token.lower() in fname.lower():
-                state_files[state] = fname
-                break
+    state_files = discover_state_files(src, group, name)
     if not state_files:
         sys.exit("no valid WebM files found in " + src)
     missing = {"idle", "interact", "move", "sit", "sleep"} - state_files.keys()
-    if missing:
+    if missing and not group:
         sys.exit("missing required animations: " + ", ".join(sorted(missing)))
 
     for fname in state_files.values():
-        shutil.copy2(os.path.join(src, fname), os.path.join(webm_dir, fname))
+        source_path = Path(src).resolve() / fname
+        target_path = Path(webm_dir) / fname
+        if source_path != target_path:
+            shutil.copy2(source_path, target_path)
 
     with sync_playwright() as p:
         chrome = find_chrome()
@@ -169,7 +226,22 @@ def run(src, name, out):
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         base = f"http://127.0.0.1:{httpd.server_address[1]}/"
-        manifest = {"fps": FPS, "size": SIZE, "states": {}}
+        manifest_path = os.path.join(pet_dir, 'manifest.json')
+        if group and os.path.exists(manifest_path):
+            with open(manifest_path, encoding='utf-8') as f:
+                manifest = json.load(f)
+            ensure_group_layout(pet_dir, manifest)
+        else:
+            manifest = {"fps": fps, "size": SIZE, "states": {}}
+        manifest.setdefault('fps', fps); manifest.setdefault('size', SIZE)
+        manifest.setdefault('states', {})
+        group_states = None
+        if group:
+            manifest.setdefault('groups', {})
+            group_states = manifest['groups'].setdefault(group, {})
+            group_states.clear()
+            group_states['fps'] = fps
+            shutil.rmtree(Path(frames_dir) / group, ignore_errors=True)
         try:
             page = browser.new_page(
                 viewport={"width": 900, "height": 900}
@@ -180,9 +252,9 @@ def run(src, name, out):
                 src_url = "/" + urllib.parse.quote(fname)
                 result = page.evaluate("(src) => window.capture(src)", src_url)
                 duration = float(result["duration"])
-                count = max(1, round(duration * FPS))
+                count = max(1, round(duration * fps))
                 urls = pick_frames(count, duration, result["frames"])
-                state_dir = os.path.join(frames_dir, state)
+                state_dir = os.path.join(frames_dir, group, state) if group else os.path.join(frames_dir, state)
                 os.makedirs(state_dir, exist_ok=True)
                 for i, url in enumerate(urls):
                     png = base64.b64decode(url.split(",", 1)[1])
@@ -190,21 +262,34 @@ def run(src, name, out):
                         os.path.join(state_dir, f"frame_{i:04d}.png"), "wb"
                     ) as f:
                         f.write(png)
-                manifest["states"][state] = {
+                entry = {
                     "duration": round(duration * 1000),
                     "count": len(urls),
                     "bbox": result["bbox"] or [0, 0, SIZE - 1, SIZE - 1],
                     "source": fname,
                 }
+                if group:
+                    group_states[state] = entry
+                else:
+                    manifest["states"][state] = entry
                 print("  wrote", len(urls), "frames")
         finally:
             httpd.shutdown()
             browser.close()
 
-    with open(
-        os.path.join(pet_dir, "manifest.json"), "w", encoding="utf-8"
-    ) as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
+    if group:
+        backup = Path(tempfile.mkdtemp(prefix='.webm-export-backup-', dir=destination.parent)) / destination.name
+        try:
+            if destination.exists():
+                shutil.move(str(destination), str(backup))
+            os.replace(pet_dir, destination)
+        except Exception:
+            if not destination.exists() and backup.exists():
+                shutil.move(str(backup), str(destination))
+            raise
+        shutil.rmtree(staging_root, ignore_errors=True)
     print("manifest", json.dumps(manifest, ensure_ascii=False, indent=2))
 
 
@@ -213,8 +298,10 @@ def main():
     parser.add_argument("--src", required=True, help="directory with WebM files")
     parser.add_argument("--name", required=True, help="operator name")
     parser.add_argument("--out", required=True, help="pet directory to write")
+    parser.add_argument("--group", help="write under frames/<group> and merge into manifest")
+    parser.add_argument("--fps", type=int, choices=SUPPORTED_FPS, default=FPS)
     args = parser.parse_args()
-    run(args.src, args.name, args.out)
+    run(args.src, args.name, args.out, args.group, args.fps)
 
 
 if __name__ == "__main__":

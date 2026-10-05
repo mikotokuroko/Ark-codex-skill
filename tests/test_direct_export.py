@@ -41,8 +41,29 @@ def test_five_required_animations_and_optional_special():
     with pytest.raises(ValueError,match='Missing'): export.selected_animations([])
 
 
+def test_grouped_selection_keeps_advertised_actions_and_fps():
+    animations = [{'name': name, 'duration': 0.1} for name in export.STATES]
+    animations.append({'name': 'FrontWave', 'duration': 0.5})
+    selected = export.selected_animations(animations, fps=60)
+    wave = next(item for item in selected if item['name'] == 'FrontWave')
+    assert wave['state'] == 'frontwave'
+    assert wave['count'] == 30
+    with pytest.raises(ValueError, match='FPS'):
+        export.selected_animations(animations, fps=24)
+
+
 def test_runtime_files_match_recorded_checksums():
     assert export.verify_runtime(export.RUNTIME)['family']=='3.8'
+
+
+def test_adding_group_preserves_flat_states_as_default_group(tmp_path):
+    pet = tmp_path / 'pet'; frames = pet / 'frames' / 'idle'; frames.mkdir(parents=True)
+    (frames / 'frame_0000.png').write_bytes(__import__('conftest').png_bytes())
+    manifest = {'fps': 20, 'size': 1000, 'states': {
+        'idle': {'count': 1, 'bbox': [0, 0, 1, 1]}}}
+    export.ensure_group_layout(pet, manifest)
+    assert 'default' in manifest['groups']
+    assert (pet / 'frames' / 'default' / 'idle' / 'frame_0000.png').is_file()
 
 
 def test_optional_special_validates_and_corruption_fails(make_pet,tmp_path):
