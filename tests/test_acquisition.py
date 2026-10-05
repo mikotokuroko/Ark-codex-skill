@@ -44,5 +44,10 @@ def test_values_accept_multiple_groups_and_supported_fps(qapp, tmp_path):
     dialog.deleteLater()
 
 
-def test_missing_repository_is_configurable(tmp_path):
+def test_missing_repository_is_configurable(tmp_path, monkeypatch):
+    import ark_deskpet.acquisition as acquisition
+
+    # A developer checkout is a valid fallback; isolate this missing-repo case.
+    monkeypatch.delenv("ARK_CODEX_REPO", raising=False)
+    monkeypatch.setattr(acquisition, "__file__", str(tmp_path / "app" / "acquisition.py"))
     assert resolve_repository(tmp_path) is None

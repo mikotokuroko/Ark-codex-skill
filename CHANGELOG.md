@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2
+
+- Coordinate random walks with animation cycles; resting poses stay stationary,
+  destinations stop movement, and manual interactions take priority.
+- Add saved activity frequency, walking proportion, speed, distance, and pause
+  controls under the new behavior settings tab.
+- Support animation groups, independent pet copies, and optional sound effects.
+- Cache cropped animation frames to avoid repeated PNG decoding.
+- Restore mouse control through Show Pet after accidental click-through.
+- Isolate the missing-repository test from the developer checkout and environment.
+
 ## 0.2.1
 
 - Show all available animations in both macOS menus using Chinese/English labels.

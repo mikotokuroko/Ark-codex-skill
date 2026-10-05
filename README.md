@@ -31,7 +31,7 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 
 ## 下载与安装
 
-[下载 v.0.2.0 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.0/Ark-Codex-Deskpet-v.0.2.0-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[下载 v.0.2.2 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.2/Ark-Codex-Deskpet-v.0.2.2-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
 
 这是包含 skill、动画素材和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
 `./ark-codex-skill/scripts/install_macos.sh`。请先满足下方的 macOS 环境要求。
