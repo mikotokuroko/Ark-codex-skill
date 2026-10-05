@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 import struct
 from typing import Any
@@ -25,6 +26,87 @@ class PetEntry:
     name: str
     path: Path
     bundled: bool
+
+
+@dataclass(frozen=True)
+class AnimationRef:
+    """Resolved metadata and frame directory for one action."""
+
+    group: str
+    state: str
+    info: dict[str, Any]
+    frame_state: str
+
+
+def animation_groups(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Returns grouped animations while preserving flat manifests."""
+    groups = manifest.get("groups")
+    if isinstance(groups, dict) and groups:
+        return {str(name): states for name, states in groups.items()
+                if isinstance(name, str) and name and "/" not in name
+                and "\\" not in name and name not in {".", ".."}
+                and isinstance(states, dict)}
+    states = manifest.get("states")
+    return {"default": states} if isinstance(states, dict) else {}
+
+
+def available_states(manifest: dict[str, Any], group: str | None = None) -> tuple[str, ...]:
+    """Returns stable action names available in one or more groups."""
+    groups = animation_groups(manifest)
+    selected = [group] if group in groups else list(groups)
+    preferred = ("idle", "interact", "move", "sit", "sleep", "special")
+    found = {key for name in selected for key in groups[name]
+             if isinstance(key, str) and key not in {"fallbacks", "fps"}}
+    return tuple(key for key in preferred if key in found) + tuple(
+        key for key in sorted(found) if key not in preferred)
+
+
+def resolve_animation(manifest: dict[str, Any], state: str,
+                      group: str | None = None) -> AnimationRef | None:
+    """Resolves an action and uses an explicit or idle fallback if absent."""
+    groups = animation_groups(manifest)
+    if not groups:
+        return None
+    selected = group if group in groups else next(iter(groups))
+    info = groups[selected].get(state)
+    frame_state = state
+    if not isinstance(info, dict):
+        fallbacks = groups[selected].get("fallbacks", {})
+        fallback_state = fallbacks.get(state) if isinstance(fallbacks, dict) else None
+        if isinstance(fallback_state, str):
+            info = groups[selected].get(fallback_state)
+            frame_state = fallback_state
+        if not isinstance(info, dict):
+            for candidate in ("idle", "relax", "interact"):
+                if isinstance(groups[selected].get(candidate), dict):
+                    info = groups[selected][candidate]
+                    frame_state = candidate
+                    break
+        if not isinstance(info, dict):
+            for candidate, candidate_info in groups[selected].items():
+                if candidate not in ("fallbacks", "fps") and isinstance(candidate_info, dict):
+                    info = candidate_info
+                    frame_state = candidate
+                    break
+    return (AnimationRef(selected, state, info, frame_state)
+            if isinstance(info, dict) else None)
+
+
+def group_fps(manifest: dict[str, Any], group: str | None = None) -> float:
+    """Returns an export FPS, allowing each group to override the default."""
+    groups = animation_groups(manifest)
+    raw_groups = manifest.get("groups")
+    if raw_groups is not None and (not isinstance(raw_groups, dict) or not raw_groups):
+        raise ManifestError("groups 必须是非空对象")
+    if isinstance(raw_groups, dict):
+        invalid_groups = [name for name, value in raw_groups.items()
+                          if not isinstance(name, str) or not name or not isinstance(value, dict)]
+        if invalid_groups:
+            raise ManifestError("动画组名称或内容无效")
+    value = groups.get(group or "", {}).get("fps") if group else None
+    if not isinstance(value, (int, float)) or value <= 0:
+        value = manifest.get("fps", 20)
+    return float(value) if isinstance(value, (int, float)) and value > 0 else 20.0
 
 
 def _read_png_size(path: Path) -> tuple[int, int]:
@@ -75,17 +157,31 @@ def validate_manifest(pet_dir: Path) -> dict[str, Any]:
     fps = manifest.get("fps")
     size = manifest.get("size")
     states = manifest.get("states")
-    if not isinstance(fps, (int, float)) or fps <= 0:
+    if not isinstance(fps, (int, float)) or not math.isfinite(float(fps)) or fps <= 0:
         raise ManifestError("fps 必须为正数")
     if not isinstance(size, int) or size <= 0:
         raise ManifestError("size 必须为正整数")
-    if not isinstance(states, dict):
-        raise ManifestError("states 必须是对象")
-    missing = [state for state in REQUIRED_STATES if state not in states]
-    if missing:
-        raise ManifestError(f"缺少必需动作：{', '.join(missing)}")
-    for state_name in (*REQUIRED_STATES, *(("special",) if "special" in states else ())):
-        info = states[state_name]
+    groups = animation_groups(manifest)
+    if not groups:
+        raise ManifestError("states 或 groups 必须是对象")
+    if not isinstance(manifest.get("groups"), dict):
+        states = manifest.get("states", {})
+        missing = [state for state in REQUIRED_STATES if state not in states]
+        if missing:
+            raise ManifestError(f"缺少必需动作：{', '.join(missing)}")
+    for group_name, states in groups.items():
+      if not any(key not in ("fallbacks", "fps") for key in states):
+        raise ManifestError(f"动画组 {group_name} 没有可播放动作")
+      group_rate = states.get("fps")
+      if group_rate is not None and (not isinstance(group_rate, (int, float))
+                                     or not math.isfinite(float(group_rate))
+                                     or group_rate <= 0):
+        raise ManifestError(f"动画组 {group_name} 的 fps 无效")
+      for state_name, info in states.items():
+        if state_name in ("fallbacks", "fps"):
+            continue
+        if not isinstance(state_name, str) or not state_name or "/" in state_name or "\\" in state_name or state_name in {".", ".."}:
+            raise ManifestError(f"动作名称无效：{state_name}")
         if not isinstance(info, dict):
             raise ManifestError(f"动作 {state_name} 必须是对象")
         count = info.get("count")
@@ -101,12 +197,10 @@ def validate_manifest(pet_dir: Path) -> dict[str, Any]:
         ):
             raise ManifestError(f"动作 {state_name} 的 bbox 无效")
         for index in range(count):
-            frame = (
-                pet_dir
-                / "frames"
-                / state_name
-                / f"frame_{index:04d}.png"
-            )
+            frame_root = pet_dir / "frames"
+            if isinstance(manifest.get("groups"), dict):
+                frame_root = frame_root / group_name
+            frame = frame_root / state_name / f"frame_{index:04d}.png"
             width, height = _read_png_size(frame)
             if width != size or height != size:
                 raise ManifestError(

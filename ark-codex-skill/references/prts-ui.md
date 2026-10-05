@@ -12,7 +12,9 @@ Operator pages live at `https://prts.wiki/w/<Operator>`.
 The widget uses Naive UI. The three relevant selects are `.n-select` elements:
 
 1. `时装组` (skin group): options include `默认` and skin names.
-2. `模型组` (model group): options are `战斗` and `基建`.
+2. `模型组` (model group): options are commonly `战斗` and `基建`; deployments
+   may expose additional labels. `scripts/prts_export.py --model-group LABEL`
+   can be repeated to export several groups in one run.
 3. `动画` (animation): options include `Default`, `Interact`, `Move`, `Relax`, `Sit`, `Sleep`.
 
 To change a select:
@@ -28,6 +30,8 @@ To change a select:
 - The exported file is a WebM animation. Suggested filenames look like
   `浊心斯卡蒂-默认-基建-Interact-x1.webm`.
 - The `Default` animation often exports a broken 110-byte file; skip files under 1000 bytes when processing.
+- Convert a selected set with `process_webm.py --group front` to accumulate it
+  under `frames/front/`; omit `--group` to retain the historical flat layout.
 
 ## Search API
 

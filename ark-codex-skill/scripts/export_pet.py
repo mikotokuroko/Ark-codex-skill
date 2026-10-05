@@ -25,6 +25,7 @@ RUNTIME = SKILL / 'assets' / 'prts-renderer'
 STATES = {'Relax': 'idle', 'Interact': 'interact', 'Move': 'move',
           'Sit': 'sit', 'Sleep': 'sleep'}
 FPS, SIZE = 20, 1000
+SUPPORTED_FPS = (20, 60)
 
 
 def report(stage: str, **values) -> None:
@@ -49,7 +50,8 @@ def fetch(url: str) -> bytes:
     raise AssertionError('unreachable')
 
 
-def discover(operator: str, skin: str, model_id: str | None = None) -> dict:
+def discover(operator: str, skin: str, model_id: str | None = None,
+             model_group: str = '基建') -> dict:
     metadata_url = None
     if model_id:
         identifier = model_id
@@ -72,11 +74,11 @@ def discover(operator: str, skin: str, model_id: str | None = None) -> dict:
         metadata['prefix'] = metadata['prefix'].replace(
             'https://static.prts.wiki/spine/', 'https://static.prts.wiki/spine38/')
     try:
-        model = metadata['skin'][skin]['基建']
+        model = metadata['skin'][skin][model_group]
         base = urljoin(metadata['prefix'], model['file'])
     except KeyError as error:
-        raise ValueError(f'No 基建 model for skin {skin}; available skins: '
-                         f'{list(metadata.get("skin", {}))}') from error
+        groups = list(metadata.get('skin', {}).get(skin, {}))
+        raise ValueError(f'No {model_group} model for skin {skin}; available groups: {groups}') from error
     return {'skeleton': base + '.skel', 'atlas': base + '.atlas', 'skin': model.get('skin'),
             'model_id': identifier, 'metadata': metadata_url}
 
@@ -120,21 +122,47 @@ def atlas_pages(text: str) -> list[str]:
     return pages
 
 
-def selected_animations(animations: list[dict]) -> list[dict]:
+def animation_state(name: str) -> str:
+    """Return a safe manifest state name while retaining every advertised action."""
+    if name in STATES:
+        return STATES[name]
+    state = re.sub(r'[^a-zA-Z0-9_-]+', '_', name.strip()).strip('_').lower()
+    if not state:
+        raise ValueError(f'Animation has no usable state name: {name!r}')
+    return state
+
+
+def selected_animations(animations: list[dict], fps: int = FPS,
+                        require_base: bool = True) -> list[dict]:
+    if fps not in SUPPORTED_FPS:
+        raise ValueError(f'FPS must be one of {SUPPORTED_FPS}, got {fps}')
     by_name = {a['name']: a for a in animations}
-    missing = STATES.keys() - by_name.keys()
+    missing = STATES.keys() - by_name.keys() if require_base else set()
     if missing: raise ValueError('Missing required animations: ' + ', '.join(sorted(missing)))
     result = []
-    for name in (*STATES, 'Special'):
+    ordered = list(STATES) + [a['name'] for a in animations
+                              if a['name'] not in STATES]
+    seen = set()
+    for name in ordered:
+        if name in seen:
+            continue
+        seen.add(name)
         if name not in by_name: continue
         duration = float(by_name[name]['duration'])
         if not math.isfinite(duration) or duration <= 0:
+            # PRTS sometimes advertises an unused zero-duration Default entry;
+            # retain the historical flat-export behavior for that sentinel.
+            if name == 'Default':
+                continue
             raise ValueError(f'Advertised animation {name} has invalid duration {duration}')
-        frames = duration * FPS
+        frames = duration * fps
         nearest = round(frames)
         count = nearest if abs(frames - nearest) <= 1e-4 else math.ceil(frames)
-        result.append({'name': name, 'duration': duration,
+        result.append({'name': name, 'state': animation_state(name), 'duration': duration,
                        'count': max(1, count)})
+    states = [item['state'] for item in result]
+    if len(states) != len(set(states)):
+        raise ValueError('Animation names collide after state normalization')
     return result
 
 
@@ -176,17 +204,38 @@ def image_bounds(png: bytes) -> list[int] | None:
 def union(a, b): return [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
 
 
+def ensure_group_layout(pet_root: Path, manifest: dict) -> None:
+    """Expose legacy flat states as the default group when groups are added."""
+    if not isinstance(manifest.get('groups'), dict) and isinstance(manifest.get('states'), dict):
+        legacy = pet_root / 'frames'
+        grouped = legacy / 'default'
+        if legacy.is_dir():
+            shutil.copytree(legacy, grouped, dirs_exist_ok=True)
+        manifest['groups'] = {'default': dict(manifest['states'])}
+
+
 def run(args) -> Path:
     from playwright.sync_api import sync_playwright
     output = args.out.expanduser().resolve()
-    if output.exists(): raise ValueError(f'Output already exists; choose a fresh directory: {output}')
+    grouped = bool(args.group)
+    if args.model_group != '基建' and not grouped:
+        raise ValueError('--group is required when --model-group is not 基建')
+    if grouped and (Path(args.group).name != args.group or args.group in {'', '.', '..'}):
+        raise ValueError(f'Unsafe group name: {args.group!r}')
+    if args.fps not in SUPPORTED_FPS:
+        raise ValueError(f'FPS must be one of {SUPPORTED_FPS}, got {args.fps}')
+    if output.exists() and not grouped:
+        raise ValueError(f'Output already exists; choose a fresh directory: {output}')
     output.parent.mkdir(parents=True, exist_ok=True)
     runtime = verify_runtime(args.runtime_dir)
     with tempfile.TemporaryDirectory(prefix='.prts-export-', dir=output.parent) as temporary:
-        stage = Path(temporary); assets = stage/'assets'; assets.mkdir()
-        shutil.copytree(args.runtime_dir, stage/'runtime')
+        stage = Path(temporary)
+        if grouped and output.exists():
+            shutil.copytree(output, stage, dirs_exist_ok=True)
+        assets = stage/'assets'; assets.mkdir(exist_ok=True)
+        shutil.copytree(args.runtime_dir, stage/'runtime', dirs_exist_ok=True)
         source = (json.loads(args.source.read_text()) if args.source else
-                  discover(args.operator, args.skin, args.model_id))
+                  discover(args.operator, args.skin, args.model_id, args.model_group))
         def source_bytes(value: str):
             if value.startswith(('https://', 'http://')): return fetch(value)
             path = Path(value).expanduser()
@@ -223,48 +272,86 @@ def run(args) -> Path:
                     window.boot(config), new Promise((_,reject)=>setTimeout(()=>reject(new Error('Model load exceeded 30s')),30000))])''',
                     {'entry': runtime['entry'], 'skeleton':'/assets/model.skel',
                      'atlas':'/assets/model.atlas', 'skin':source.get('skin')})
-                selected = selected_animations(animations)
+                selected = selected_animations(animations, args.fps, require_base=args.model_group == '基建')
+                if not selected:
+                    raise ValueError(f'No usable animations advertised for model group {args.model_group}')
                 report('animations', available=animations, selected=selected)
                 fit = page.evaluate('a=>window.fit(a)', selected)
                 def capture(name, timestamp):
                     url = page.evaluate('p=>window.frame(p[0],p[1])', [name,timestamp])
                     return base64.b64decode(url.split(',',1)[1])
-                first = capture('Relax',0)
+                preflight_name = 'Relax' if not grouped else selected[0]['name']
+                first = capture(preflight_name,0)
                 bounds = image_bounds(first)
-                if not bounds: raise ValueError('Preflight Relax frame is blank')
+                if not bounds: raise ValueError(f'Preflight {preflight_name} frame is blank')
                 capture(selected[-1]['name'], selected[-1]['duration']/2)
-                if capture('Relax',0) != first:
+                if capture(preflight_name,0) != first:
                     raise ValueError('Preflight failed: pose depends on prior animation state')
                 (stage/'preflight.png').write_bytes(first)
                 report('preflight-passed', bounds=bounds, fit=fit, deterministic=True)
-                manifest = {'fps': FPS, 'size': SIZE, 'states': {}}
+                pet_root = stage/'pet'; manifest_path = pet_root/'manifest.json'
+                if grouped and manifest_path.exists():
+                    manifest = json.loads(manifest_path.read_text())
+                    ensure_group_layout(pet_root, manifest)
+                else:
+                    manifest = {'fps': args.fps, 'size': SIZE, 'states': {}}
+                manifest.setdefault('fps', args.fps)
+                manifest.setdefault('size', SIZE)
+                manifest.setdefault('states', {})
+                if grouped:
+                    manifest.setdefault('groups', {})
+                    group_states = manifest['groups'].setdefault(args.group, {})
+                    group_states.clear()
+                    group_states['fps'] = args.fps
+                    shutil.rmtree(stage/'pet'/'frames'/args.group, ignore_errors=True)
                 if not args.preflight:
                     for animation in selected:
-                        name = animation['name']; state = STATES.get(name,'special')
-                        frames = stage/'pet'/'frames'/state; frames.mkdir(parents=True)
+                        name = animation['name']; state = animation['state']
+                        frames = (stage/'pet'/'frames'/args.group/state if grouped
+                                  else stage/'pet'/'frames'/state)
+                        frames.mkdir(parents=True, exist_ok=True)
                         total_bounds = None
                         for i in range(animation['count']):
-                            png = capture(name,i/FPS); bounds = image_bounds(png)
+                            png = capture(name,i/args.fps); bounds = image_bounds(png)
                             if bounds:
                                 if min(bounds[:2]) <= 0 or max(bounds[2:]) >= SIZE-1:
-                                    raise ValueError(f'Clipped frame: {name} at {i/FPS}s')
+                                    raise ValueError(f'Clipped frame: {name} at {i/args.fps}s')
                                 total_bounds = bounds if total_bounds is None else union(total_bounds,bounds)
                             (frames/f'frame_{i:04d}.png').write_bytes(png)
                         if total_bounds is None: raise ValueError(f'All frames blank: {name}')
-                        manifest['states'][state] = {'duration':round(animation['count']/FPS*1000),
+                        entry = {'duration':round(animation['count']/args.fps*1000),
                             'count':animation['count'],'bbox':total_bounds,
-                            'source':f'PRTS {args.operator} {args.skin} 基建 {name}'}
+                            'source':f'PRTS {args.operator} {args.skin} {args.model_group} {name}'}
+                        if grouped:
+                            manifest['groups'][args.group][state] = entry
+                        else:
+                            manifest['states'][state] = entry
                         report('animation-complete', name=name, frames=animation['count'])
-                    (stage/'pet'/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
+                    pet_root.mkdir(parents=True, exist_ok=True)
+                    manifest_path.write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
                 provenance = dict(source)
                 for key, asset in [('skeleton', 'model.skel'), ('atlas', 'model.atlas')]:
                     if not provenance[key].startswith(('https://', 'http://')):
                         provenance[key] = 'assets/' + asset
                 (stage/'export.json').write_text(json.dumps({'operator':args.operator,'skin':args.skin,
                     'source':provenance,'model_version':version,'animations':selected,'fit':fit,
-                    'preflight_only':args.preflight},ensure_ascii=False,indent=2))
+                    'preflight_only':args.preflight, 'group': args.group,
+                    'model_group': args.model_group,
+                    'fps': args.fps},ensure_ascii=False,indent=2))
             finally: browser.close()
-        os.replace(stage,output)
+        if grouped and output.exists():
+            # Publish the fully staged package as one directory replacement;
+            # retain a recoverable sibling backup if the filesystem operation fails.
+            backup = Path(tempfile.mkdtemp(prefix='.prts-export-backup-', dir=output.parent)) / output.name
+            try:
+                shutil.move(str(output), str(backup))
+                os.replace(stage, output)
+            except Exception:
+                if not output.exists() and backup.exists():
+                    shutil.move(str(backup), str(output))
+                raise
+        else:
+            os.replace(stage,output)
     report('complete', output=str(output), pet=str(output/'pet') if not args.preflight else None,
            preflight_only=args.preflight)
     return output
@@ -278,6 +365,9 @@ def main():
     parser.add_argument('--model-id', help='PRTS char_spine model ID, for direct metadata discovery when the operator page is unavailable')
     parser.add_argument('--runtime-dir',type=Path,default=RUNTIME)
     parser.add_argument('--chrome'); parser.add_argument('--preflight',action='store_true')
+    parser.add_argument('--group', help='Write this animation group under frames/<group> and accumulate it')
+    parser.add_argument('--model-group', default='基建', help='PRTS model group to discover (default: 基建)')
+    parser.add_argument('--fps', type=int, choices=SUPPORTED_FPS, default=FPS)
     args=parser.parse_args()
     import adoption
     if not args.preflight:

@@ -15,6 +15,9 @@ except ImportError:
 ANIMATIONS = ["Interact", "Move", "Relax", "Sit", "Sleep"]
 LOAD_BTN = "\u70b9\u6b64\u8f7d\u5165\u6a21\u578b"
 JIANJI = "\u57fa\u5efa"
+# PRTS deployments expose these labels inconsistently; callers may provide any
+# exact label with --model-group.  The default remains the historical base set.
+DEFAULT_MODEL_GROUPS = [JIANJI]
 
 
 def find_chrome():
@@ -79,8 +82,9 @@ def open_operator_page(page, operator):
         load_btn.wait_for(state="visible", timeout=120000)
 
 
-def run_export(operator, skin, out_dir):
+def run_export(operator, skin, out_dir, model_groups=None):
     os.makedirs(out_dir, exist_ok=True)
+    model_groups = model_groups or DEFAULT_MODEL_GROUPS
     with sync_playwright() as p:
         chrome = find_chrome()
         if chrome:
@@ -108,41 +112,39 @@ def run_export(operator, skin, out_dir):
 
             skin_select = page.locator(".n-select").nth(0)
             select_option(page, skin_select, skin or "\u9ed8\u8ba4")
-            model_select = page.locator(".n-select").nth(1)
-            select_option(page, model_select, JIANJI)
-
             skin_label = skin or "\u9ed8\u8ba4"
             anim_select = page.locator(".n-select").nth(2)
-            anim_select.click()
-            options = page.locator(".n-base-select-option")
-            options.first.wait_for(state="visible", timeout=30000)
-            available = [name.strip() for name in options.all_text_contents()]
-            page.keyboard.press("Escape")
-            missing = [name for name in ANIMATIONS if name not in available]
-            if missing:
-                raise RuntimeError(f"Missing required animations: {missing}; available: {available}")
-            animations = ANIMATIONS + (["Special"] if "Special" in available else [])
-            print("ANIMATIONS", animations, flush=True)
-            for anim in animations:
-                anim_select = page.locator(".n-select").nth(2)
-                select_option(page, anim_select, anim)
-                page.wait_for_timeout(2000)
-                download = find_download_button(page)
-                with page.expect_download(timeout=300000) as info:
-                    download.click()
-                dl = info.value
-                ext = os.path.splitext(dl.suggested_filename)[1] or ".webm"
-                out_path = os.path.join(
-                    out_dir, f"{operator}-{skin_label}-基建-{anim}-x1{ext}"
-                )
-                dl.save_as(out_path)
-                print(
-                    "EXPORTED",
-                    anim,
-                    "=>",
-                    out_path,
-                    os.path.getsize(out_path),
-                )
+            model_select = page.locator(".n-select").nth(1)
+            for model_group in model_groups:
+                select_option(page, model_select, model_group)
+                anim_select.click()
+                options = page.locator(".n-base-select-option")
+                options.first.wait_for(state="visible", timeout=30000)
+                available = [name.strip() for name in options.all_text_contents()]
+                page.keyboard.press("Escape")
+                missing = [name for name in ANIMATIONS if name not in available]
+                if model_group == JIANJI and missing:
+                    raise RuntimeError(f"Missing required animations for {model_group}: {missing}; available: {available}")
+                animations = ([name for name in ANIMATIONS if name in available]
+                              if model_group == JIANJI else
+                              [name for name in available if name != "Default"])
+                if "Special" in available and "Special" not in animations:
+                    animations.append("Special")
+                print("ANIMATIONS", model_group, animations, flush=True)
+                for anim in animations:
+                    anim_select = page.locator(".n-select").nth(2)
+                    select_option(page, anim_select, anim)
+                    page.wait_for_timeout(2000)
+                    download = find_download_button(page)
+                    with page.expect_download(timeout=300000) as info:
+                        download.click()
+                    dl = info.value
+                    ext = os.path.splitext(dl.suggested_filename)[1] or ".webm"
+                    out_path = os.path.join(
+                        out_dir, f"{operator}-{skin_label}-{model_group}-{anim}-x1{ext}"
+                    )
+                    dl.save_as(out_path)
+                    print("EXPORTED", model_group, anim, "=>", out_path, os.path.getsize(out_path))
         finally:
             browser.close()
 
@@ -152,8 +154,10 @@ def main():
     parser.add_argument("operator", help="Arknights operator name")
     parser.add_argument("--skin", default=None, help="skin name; default = 默认")
     parser.add_argument("--out", default="prts_webm", help="output directory")
+    parser.add_argument("--model-group", action="append", dest="model_groups",
+                        help="PRTS model group label; repeat to export multiple groups (default: 基建)")
     args = parser.parse_args()
-    run_export(args.operator, args.skin, args.out)
+    run_export(args.operator, args.skin, args.out, args.model_groups)
 
 
 if __name__ == "__main__":
