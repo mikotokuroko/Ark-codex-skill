@@ -31,9 +31,14 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 
 ## 下载与安装
 
-[下载 v.0.2.3 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/Ark-Codex-Deskpet-v.0.2.3-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+| 平台 | 下载 | 使用方式 |
+|---|---|---|
+| Windows 10/11 x64 | [Windows 便携 ZIP（130 MiB）](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/Ark-Codex-Deskpet-Windows-x64.zip) | 解压整个目录，运行 `Ark Codex Deskpet.exe`；无需 Python。 |
+| macOS | [v.0.2.3 macOS 源码包（77.4 MiB）](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/Ark-Codex-Deskpet-v.0.2.3-source.zip) | 按下方说明构建并安装。 |
 
-这是包含 skill、结城理默认动画包和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
+[Windows SHA-256 校验](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/SHA256SUMS-Windows.txt) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+
+macOS 下载项是包含 skill、结城理默认动画包和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
 `./ark-codex-skill/scripts/install_macos.sh`。请先满足下方的 macOS 环境要求。
 保留解压后的项目目录，其中的 `.venv-macos` 也用于生成桌宠。
 
@@ -89,7 +94,11 @@ v.0.2.0 源码包已包含此功能；统计仅在用户明确同意后启用。
 
 Windows 版本与 macOS 共享动作策略、重力、随机散步、设置和桌宠库，并提供原生点击穿透、全屏隐藏、托盘和开机监听。只内置结城理。
 
-运行和构建步骤见 [Windows 使用说明](docs/windows.md)。Windows 构建工作流会生成便携 ZIP；解压整个目录后运行 `Ark Codex Deskpet.exe`，无需安装 Python。
+运行和构建步骤见 [Windows 使用说明](docs/windows.md)。解压整个 Windows ZIP 后运行 `Ark Codex Deskpet.exe`，请保留旁边的 `_internal` 目录。
+
+Windows 导出工具和源码构建请使用 [Windows 构建对应源码](https://github.com/mikotokuroko/Ark-codex-skill/archive/517898b.zip) 或最新 `macos` 分支；原有 v.0.2.3 macOS 源码 ZIP 发布于 Windows 移植之前。
+
+Windows runner 已通过 77 项共享功能测试、3 项原生测试，以及打包程序启动、显示/隐藏、刷新桌宠库、退出和设置保存检查。
 
 ## macOS 环境要求
 
