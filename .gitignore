@@ -19,3 +19,5 @@ ark-codex-skill/assets/deskpet-app-macos/pets/*
 !ark-codex-skill/assets/deskpet-app-macos/pets/结城理/**
 
 .DS_Store
+
+.venv-windows/

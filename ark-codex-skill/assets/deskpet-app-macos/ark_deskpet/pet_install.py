@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 import shutil
 import tempfile
@@ -16,8 +17,12 @@ def validate_pet_name(name: str) -> str:
     normalized = name.strip()
     if not normalized or normalized in (".", ".."):
         raise ValueError("桌宠名称不能为空")
-    if "/" in normalized or "\x00" in normalized:
+    if "/" in normalized or "\\" in normalized or "\x00" in normalized:
         raise ValueError("桌宠名称不能包含路径分隔符")
+    if sys.platform == "win32":
+        reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+        if any(c in normalized for c in '<>:"|?*') or normalized.endswith((".", " ")) or normalized.split(".")[0].upper() in reserved:
+            raise ValueError("桌宠名称包含 Windows 不支持的字符或保留名称")
     return normalized
 
 

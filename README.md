@@ -57,7 +57,7 @@ v.0.2.0 源码包已包含此功能；统计仅在用户明确同意后启用。
 
 | 平台 | 支持状态 | 运行方式 |
 |---|---|---|
-| Windows 10/11 | 支持 | Python 本地模板和 `.bat` 启动脚本 |
+| Windows 10/11 x64 | 支持 | 共享 macOS 功能的独立 `.exe`，另保留原始 Python 模板 |
 | macOS 13+ Apple silicon | 支持 | ad-hoc 签名的本地 `.app` |
 | Linux | 仅素材处理 | 可运行导出和转换脚本，不包含桌宠应用 |
 
@@ -84,6 +84,12 @@ v.0.2.0 源码包已包含此功能；统计仅在用户明确同意后启用。
 其他本地角色不纳入 Git、源码 ZIP 或应用构建；可使用 skill 另行生成、导入。
 用户安装的同名桌宠仍优先于内置版本。菜单栏使用 `docs/images/icon` 提供的角色图标。
 
+
+## Windows 版本
+
+Windows 版本与 macOS 共享动作策略、重力、随机散步、设置和桌宠库，并提供原生点击穿透、全屏隐藏、托盘和开机监听。只内置结城理。
+
+运行和构建步骤见 [Windows 使用说明](docs/windows.md)。Windows 构建工作流会生成便携 ZIP；解压整个目录后运行 `Ark Codex Deskpet.exe`，无需安装 Python。
 
 ## macOS 环境要求
 

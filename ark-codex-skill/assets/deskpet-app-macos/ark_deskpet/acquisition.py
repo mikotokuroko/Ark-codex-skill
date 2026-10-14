@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 import shutil
 import tempfile
@@ -27,7 +28,8 @@ def resolve_repository(configured: str | Path | None = None) -> tuple[Path, Path
     candidates.extend(here.parents)
     for root in candidates:
         script = root / "ark-codex-skill" / "scripts" / "export_pet.py"
-        python = root / ".venv-macos" / "bin" / "python"
+        python = (root / ".venv-windows" / "Scripts" / "python.exe" if sys.platform == "win32"
+                  else root / ".venv-macos" / "bin" / "python")
         if script.is_file() and python.is_file():
             return python, script
     return None

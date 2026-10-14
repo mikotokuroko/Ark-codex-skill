@@ -25,18 +25,25 @@ def bundled_pets_dir() -> Path:
 def application_support_dir(home: Path | None = None) -> Path:
     """Returns the directory containing settings and user pets."""
     base = home if home is not None else Path.home()
+    if sys.platform == "win32":
+        local = Path(os.environ.get("LOCALAPPDATA", str(base / "AppData" / "Local"))) if home is None else base / "AppData" / "Local"
+        return local / APP_NAME
     return base / "Library" / "Application Support" / APP_NAME
 
 
 def cache_dir(home: Path | None = None) -> Path:
     """Returns the directory containing runtime state and sockets."""
     base = home if home is not None else Path.home()
+    if sys.platform == "win32":
+        return application_support_dir(home) / "Cache"
     return base / "Library" / "Caches" / APP_NAME
 
 
 def log_dir(home: Path | None = None) -> Path:
     """Returns the application log directory."""
     base = home if home is not None else Path.home()
+    if sys.platform == "win32":
+        return application_support_dir(home) / "Logs"
     return base / "Library" / "Logs" / APP_NAME
 
 

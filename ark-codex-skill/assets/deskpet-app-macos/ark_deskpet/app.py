@@ -166,6 +166,10 @@ MENU_ICON_DEVICE_PIXEL_RATIOS = (1, 2, 3)
 
 def _set_native_ignores_mouse_events(widget: QWidget, enabled: bool) -> None:
     """Apply native click-through only to a live Cocoa window."""
+    if QApplication.platformName().lower() == "windows":
+        from .windows_platform import set_click_through
+        set_click_through(int(widget.winId()), enabled)
+        return
     if QApplication.platformName().lower() != "cocoa":
         return
     if not widget.testAttribute(Qt.WA_WState_Created):
@@ -500,7 +504,7 @@ class PetWindow(QWidget):
         self.speech = SpeechBubbleController(self, enabled=bool(self.settings.get("sound_enabled", False)))
         self.setWindowOpacity(max(0.15, min(1.0, self.opacity)))
         self.setAttribute(Qt.WA_TransparentForMouseEvents, self.click_through)
-        if QApplication.platformName().lower() == "cocoa":
+        if QApplication.platformName().lower() in ("cocoa", "windows"):
             try:
                 _set_native_ignores_mouse_events(self, self.click_through)
             except (ImportError, AttributeError, ValueError):
@@ -520,6 +524,8 @@ class PetWindow(QWidget):
     def showEvent(self, event: object) -> None:
         """Keeps the pet above windows from other macOS applications."""
         super().showEvent(event)
+        if QApplication.platformName().lower() == "windows":
+            _set_native_ignores_mouse_events(self, self.click_through)
         if QApplication.platformName().lower() != "cocoa":
             return
         import AppKit
@@ -710,7 +716,7 @@ class PetWindow(QWidget):
     def set_click_through(self, enabled: bool) -> None:
         self.click_through = bool(enabled)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, self.click_through)
-        if QApplication.platformName().lower() == "cocoa":
+        if QApplication.platformName().lower() in ("cocoa", "windows"):
             try:
                 _set_native_ignores_mouse_events(self, self.click_through)
             except (ImportError, AttributeError, ValueError):
@@ -1068,9 +1074,13 @@ class PetWindow(QWidget):
                 self.show()
             return
         pet_rect = Rect(self.x(), self.y(), self.width(), self.height())
-        result = self.controller.fullscreen_detector.detect(
-            pet_rect, self._screens()
-        )
+        if sys.platform == "win32":
+            from .windows_platform import is_fullscreen
+            result = is_fullscreen(int(self.winId()))
+        else:
+            result = self.controller.fullscreen_detector.detect(
+                pet_rect, self._screens()
+            )
         if result is True and self.isVisible():
             self.fullscreen_hidden = True
             self.hide()
@@ -1376,6 +1386,8 @@ class DeskpetController:
 
     def watcher_executable(self) -> Path:
         """Returns the helper executable embedded in the installed bundle."""
+        if sys.platform == "win32":
+            return Path(sys.executable)
         return app_bundle_path() / "Contents" / "Helpers" / "ArkCodexWatcher"
 
     def set_autostart(self, enabled: bool) -> None:
@@ -1474,6 +1486,9 @@ def _set_accessory_activation_policy() -> None:
 def run(argv: list[str] | None = None) -> int:
     """Runs the single-instance desktop-pet application."""
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if sys.platform == "win32" and "--watch" in arguments:
+        from .windows_platform import run_watcher
+        return run_watcher()
     ensure_directories()
     configure_logging()
     application = QApplication([sys.argv[0], *arguments])
@@ -1481,7 +1496,8 @@ def run(argv: list[str] | None = None) -> int:
     application.setApplicationDisplayName(APP_NAME)
     application.setOrganizationName("AstrariaX")
     application.setQuitOnLastWindowClosed(False)
-    _set_accessory_activation_policy()
+    if sys.platform == "darwin":
+        _set_accessory_activation_policy()
 
     command = None
     if "--command" in arguments:

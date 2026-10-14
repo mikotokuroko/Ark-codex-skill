@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import plistlib
 import subprocess
+import sys
 from typing import Any
 
 from .constants import WATCHER_ID
@@ -18,6 +19,9 @@ class LaunchAgentError(RuntimeError):
 
 def launch_agent_enabled(home: Path | None = None) -> bool:
     """Returns whether the watcher LaunchAgent file is installed."""
+    if sys.platform == "win32":
+        from .windows_platform import startup_enabled
+        return startup_enabled()
     return launch_agent_path(home).is_file()
 
 
@@ -54,6 +58,10 @@ def enable_launch_agent(
     watcher_executable: Path, home: Path | None = None
 ) -> None:
     """Atomically installs and bootstraps the user watcher LaunchAgent."""
+    if sys.platform == "win32":
+        from .windows_platform import set_startup
+        set_startup(watcher_executable)
+        return
     target = launch_agent_path(home)
     target.parent.mkdir(parents=True, exist_ok=True)
     log_dir(home).mkdir(parents=True, exist_ok=True)
@@ -78,6 +86,10 @@ def enable_launch_agent(
 
 def disable_launch_agent(home: Path | None = None) -> None:
     """Boots out and removes only this app's user LaunchAgent."""
+    if sys.platform == "win32":
+        from .windows_platform import set_startup
+        set_startup(None)
+        return
     target = launch_agent_path(home)
     domain = f"gui/{os.getuid()}"
     _run_launchctl(["bootout", domain, str(target)], check=False)

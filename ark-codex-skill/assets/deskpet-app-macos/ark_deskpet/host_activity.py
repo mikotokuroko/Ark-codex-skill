@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import datetime as _datetime
 import math
 import subprocess
+import sys
 import time
 from typing import Any, Callable, Iterable
 
@@ -117,6 +118,9 @@ def running_applications() -> list[dict[str, Any]]:
     delayed and failures are treated as an unavailable host probe.
     """
 
+    if sys.platform == "win32":
+        from .windows_platform import running_applications as windows_applications
+        return windows_applications()
     try:
         import AppKit
     except ImportError:

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import os
+import sys
 from pathlib import Path
 import socket
 from typing import Callable
@@ -13,6 +16,14 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from .constants import IPC_COMMANDS
 
 
+def _server_name(path: Path) -> str:
+    if sys.platform == "win32":
+        # Windows pipe names cannot contain filesystem path separators.
+        identity = os.path.normcase(str(path.resolve())).encode("utf-8")
+        return "ArkCodexDeskpet-" + hashlib.sha256(identity).hexdigest()[:24]
+    return str(path)
+
+
 def send_command(
     socket_path: Path, command: str, timeout_ms: int = 1500
 ) -> bool:
@@ -20,7 +31,7 @@ def send_command(
     if command not in IPC_COMMANDS:
         raise ValueError(f"unsupported IPC command: {command}")
     client = QLocalSocket()
-    client.connectToServer(str(socket_path), QIODevice.WriteOnly)
+    client.connectToServer(_server_name(socket_path), QIODevice.WriteOnly)
     if not client.waitForConnected(timeout_ms):
         return False
     client.write((command + "\n").encode("utf-8"))
@@ -37,7 +48,7 @@ def send_command_stdlib(socket_path: Path, command: str) -> bool:
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(1.5)
-            client.connect(str(socket_path))
+            client.connect(_server_name(socket_path))
             client.sendall((command + "\n").encode("utf-8"))
     except OSError:
         return False
@@ -67,15 +78,15 @@ class CommandServer(QObject):
     def listen(self) -> bool:
         """Starts listening, removing only a stale runtime socket if needed."""
         self._socket_path.parent.mkdir(parents=True, exist_ok=True)
-        if self._server.listen(str(self._socket_path)):
+        if self._server.listen(_server_name(self._socket_path)):
             return True
         probe = QLocalSocket()
-        probe.connectToServer(str(self._socket_path), QIODevice.WriteOnly)
+        probe.connectToServer(_server_name(self._socket_path), QIODevice.WriteOnly)
         if probe.waitForConnected(250):
             probe.disconnectFromServer()
             return False
-        QLocalServer.removeServer(str(self._socket_path))
-        return self._server.listen(str(self._socket_path))
+        QLocalServer.removeServer(_server_name(self._socket_path))
+        return self._server.listen(_server_name(self._socket_path))
 
     def close(self) -> None:
         """Closes the server and removes its runtime socket."""
@@ -89,7 +100,7 @@ class CommandServer(QObject):
             client.deleteLater()
         self._clients.clear()
         self._server.close()
-        QLocalServer.removeServer(str(self._socket_path))
+        QLocalServer.removeServer(_server_name(self._socket_path))
 
     def _accept_connections(self) -> None:
         while self._server.hasPendingConnections():

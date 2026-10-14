@@ -1,0 +1,46 @@
+name: Windows desktop pet
+on:
+  push:
+    branches: ['codex/windows-parity']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-windows.txt
+      - run: python -m pip install -r requirements-windows.txt
+      - name: Shared feature tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_animation_policy.py tests/test_animation_ui.py tests/test_animation_groups_runtime.py tests/test_wandering.py tests/test_gravity.py tests/test_behavior_settings.py tests/test_lag_recovery.py tests/test_status_polling.py tests/test_manifest_library.py tests/test_windows_platform.py -q
+      - name: Native Windows integration tests
+        env:
+          QT_QPA_PLATFORM: windows
+        run: python -m pytest tests/test_windows_native.py -q
+      - run: python -m PyInstaller --noconfirm packaging/ArkCodexDeskpetWindows.spec
+      - run: python packaging/smoke_windows.py "dist/Ark Codex Deskpet/Ark Codex Deskpet.exe"
+      - name: Package
+        shell: pwsh
+        run: |
+          $pets = @(Get-ChildItem 'dist/Ark Codex Deskpet/_internal/pets' -Directory)
+          if ($pets.Count -ne 1 -or $pets[0].Name -ne '结城理') { throw 'Unexpected bundled pets' }
+          Copy-Item docs/windows.md 'dist/Ark Codex Deskpet/README.md'
+          Compress-Archive -Path 'dist/Ark Codex Deskpet' -DestinationPath 'dist/Ark-Codex-Deskpet-Windows-x64.zip'
+          $hash = (Get-FileHash 'dist/Ark-Codex-Deskpet-Windows-x64.zip' -Algorithm SHA256).Hash.ToLower()
+          "$hash  Ark-Codex-Deskpet-Windows-x64.zip" | Set-Content 'dist/SHA256SUMS-Windows.txt'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ark-Codex-Deskpet-Windows-x64
+          path: |
+            dist/Ark-Codex-Deskpet-Windows-x64.zip
+            dist/SHA256SUMS-Windows.txt

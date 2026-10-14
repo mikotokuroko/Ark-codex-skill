@@ -8,6 +8,7 @@ import math
 import os
 from pathlib import Path
 import tempfile
+import sys
 from typing import Any
 
 from .constants import AUTO_ANIMATIONS_KEY, BEHAVIOR_RANGES, DEFAULT_SETTINGS, SETTINGS_VERSION
@@ -95,6 +96,9 @@ def pid_is_alive(pid: object) -> bool:
     """Returns whether a process identifier names a live process."""
     if not isinstance(pid, int) or pid <= 0:
         return False
+    if sys.platform == "win32":
+        import psutil
+        return psutil.pid_exists(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
