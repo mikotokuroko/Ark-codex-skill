@@ -6,23 +6,10 @@ import plistlib
 
 repository = Path(SPECPATH).parent
 macos_root = repository / "ark-codex-skill" / "assets" / "deskpet-app-macos"
-default_pet_name = "予愿安洁莉娜"
-default_pet = (
-    repository
-    / "ark-codex-skill"
-    / "assets"
-    / "deskpet-app"
-    / "pets"
-    / default_pet_name
-)
+# Keep this explicit: locally installed/ignored pets must never enter releases.
+default_pet_name = "结城理"
+default_pet = macos_root / "pets" / default_pet_name
 menu_icon = macos_root / "resources" / "ark-codex-tray.webp"
-additional_pet_data = []
-for pet in sorted((macos_root / "pets").glob("*")):
-    if pet.is_dir() and (pet / "manifest.json").is_file():
-        additional_pet_data.extend([
-            (str(pet / "manifest.json"), f"pets/{pet.name}"),
-            (str(pet / "frames"), f"pets/{pet.name}/frames"),
-        ])
 packaging = repository / "packaging"
 
 with (packaging / "Info.plist").open("rb") as plist_file:
@@ -43,7 +30,7 @@ app_analysis = Analysis(
             "LaunchAgent",
         ),
         (str(menu_icon), "resources"),
-    ] + additional_pet_data,
+    ],
     hiddenimports=[
         "AppKit",
         "Foundation",

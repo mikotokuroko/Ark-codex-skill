@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Move Codex status scans off the animation thread and share results across pet copies.
+- Restore independent gravity with an enable/disable switch in settings.
+- Bundle only 结城理 as the default pet; ignore other local packs and exclude them from source releases and application builds.
+
 ## 0.2.2
 
 - Coordinate random walks with animation cycles; resting poses stay stationary,

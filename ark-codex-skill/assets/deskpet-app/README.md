@@ -1,6 +1,6 @@
 # Codex 桌宠
 
-一个使用 Python 虚拟环境 + PySide6 的透明桌面宠物库，可以显示 Codex 当前是否运行以及最近的运行状态。项目初始自带予愿安洁莉娜，可以直接启动；想加入更多角色时再使用 Ark Codex Skill 生成。
+一个使用 Python 虚拟环境 + PySide6 的透明桌面宠物库，可以显示 Codex 当前是否运行以及最近的运行状态。通过 scaffold_deskpet.py 创建项目时会复制结城理默认包，可以直接启动；想加入更多角色时再使用 Ark Codex Skill 生成。
 
 ## 运行
 
@@ -79,7 +79,7 @@ python <skill目录>/scripts/create_shortcuts.py --project <桌宠项目目录>
 
 角色目录放在 `pets/` 下，每个目录包含 `manifest.json`、`frames/` 动画帧和 `webm/` 原始素材。
 
-- `予愿安洁莉娜`：默认时装、基建模型（初始自带）
+- `结城理`：默认时装、基建模型（初始自带）
 - `浊心斯卡蒂`：默认时装、基建模型（示例，需要先用 skill 生成）
 
 每个角色的动画映射：

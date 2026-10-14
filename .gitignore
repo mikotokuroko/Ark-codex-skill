@@ -8,12 +8,14 @@ __pycache__/
 build/
 dist/
 pets/
-!ark-codex-skill/assets/deskpet-app/pets/
-!ark-codex-skill/assets/deskpet-app/pets/**
 work/
 *.log
 *.pid
 *.flag
 
 !ark-codex-skill/assets/deskpet-app-macos/pets/
-!ark-codex-skill/assets/deskpet-app-macos/pets/**
+ark-codex-skill/assets/deskpet-app-macos/pets/*
+!ark-codex-skill/assets/deskpet-app-macos/pets/结城理/
+!ark-codex-skill/assets/deskpet-app-macos/pets/结城理/**
+
+.DS_Store

@@ -85,6 +85,7 @@ from .paths import (
     user_pets_dir,
 )
 from .sessions import get_codex_status
+from .status_monitor import StatusMonitor
 from .storage import (
     atomic_write_json,
     clean_stale_instance,
@@ -338,6 +339,10 @@ class SettingsDialog(QDialog):
         behavior = QWidget()
         behavior_form = QFormLayout(behavior)
         behavior_form.addRow(self.motion)
+        self.gravity = QCheckBox("启用重力（松手后落到屏幕底部）")
+        self.gravity.setChecked(bool(settings.get("gravity_enabled", False)))
+        self.gravity.setToolTip("独立于自主移动；空中会下落，落地后原地动作保持静止。关闭后停在当前位置。")
+        behavior_form.addRow(self.gravity)
         self.behavior_controls = {}
         labels = {
             "activity_frequency": ("活动频率", "%", "越高越常选择新动作；100% 为标准。"),
@@ -364,7 +369,7 @@ class SettingsDialog(QDialog):
         for key in ("walking_frequency", "walking_speed", "walking_distance", "pause_min", "pause_max"):
             self.behavior_controls[key].setEnabled(self.motion.isChecked())
             self.motion.toggled.connect(self.behavior_controls[key].setEnabled)
-        note = QLabel("移动时只播放走路动作；坐下、放松和互动时保持原地。\n活动频率也适用于菜单中的自动动作。")
+        note = QLabel("散步时只播放走路动作；落地后坐下、放松和互动保持原地。\n活动频率也适用于菜单中的自动动作。")
         note.setWordWrap(True)
         behavior_form.addRow(note)
         tabs.addTab(behavior, "动作与移动")
@@ -423,6 +428,7 @@ class SettingsDialog(QDialog):
             "auto_hide_fullscreen": self.auto_hide.isChecked(),
             "autostart_with_codex": self.autostart.isChecked(),
             "motion_enabled": self.motion.isChecked(),
+            "gravity_enabled": self.gravity.isChecked(),
             "sound_enabled": self.sounds.isChecked(),
         }
 
@@ -473,6 +479,7 @@ class PetWindow(QWidget):
         self.physics_timer.start()
         self._wander = WanderMotion()
         self._walk_flipped: bool | None = None
+        self._gravity_body: PhysicsBody | None = None
         self._physics_body: PhysicsBody | None = None
         self._physics_clock = time.monotonic()
         self.configure_behavior()
@@ -623,10 +630,18 @@ class PetWindow(QWidget):
         self._walk_flipped = None
 
     def update_physics(self) -> None:
-        """Move only during an autonomous walk, preserving the user's height."""
+        """Apply independent gravity, then grounded autonomous walking."""
         now = time.monotonic()
         dt = min(0.1, max(0.0, now - self._physics_clock))
         self._physics_clock = now
+        if not self.isVisible() or self.dragging or self.press_global is not None:
+            self._gravity_body = None
+            self._stop_walking()
+            return
+        if self.update_gravity(dt):
+            self._stop_walking()
+            self.animation_policy.finish_walk()
+            return
         if (not bool(self.settings.get("motion_enabled", False))
                 or not self.animation_policy.motion_enabled
                 or not self.isVisible() or self.dragging
@@ -661,6 +676,27 @@ class PetWindow(QWidget):
             self.move(round(body.x), self.y())
         if arrived:
             self._apply_policy_transition(self.animation_policy.finish_walk())
+
+    def update_gravity(self, dt: float) -> bool:
+        """Return whether airborne; keep falling independent of animation state."""
+        if not self.settings.get("gravity_enabled", False):
+            self._gravity_body = None
+            return False
+        screens = self._screens()
+        if not screens:
+            self._gravity_body = None
+            return False
+        rect = Rect(self.x(), self.y(), self.width(), self.height())
+        bounds = max(screens, key=lambda screen: intersection_area(rect, screen))
+        body = self._gravity_body
+        if body is None or round(body.y) != self.y():
+            body = PhysicsBody(self.x(), self.y(), self.width(), self.height())
+            self._gravity_body = body
+        body.x, body.width, body.height = self.x(), self.width(), self.height()
+        body.fall(dt, bounds)
+        if round(body.y) != self.y():
+            self.move(self.x(), round(body.y))
+        return not body.grounded
 
     def toggle_flip(self) -> None:
         self.flipped = not self.flipped
@@ -1107,7 +1143,8 @@ class PetWindow(QWidget):
 
     def refresh_status(self) -> None:
         """Reads recent Codex status without writing to the sessions directory."""
-        status = get_codex_status()
+        monitor = getattr(self.controller, "status_monitor", None)
+        status = monitor.snapshot if monitor is not None else get_codex_status()
         state = status.get("state", "idle")
         if state not in ("idle", "running", "waiting", "error"):
             state = "idle"
@@ -1158,6 +1195,8 @@ class DeskpetController:
         self.fullscreen_detector = FullscreenDetector()
         self.windows: dict[str, PetWindow] = {}
         self.refresh_library(create_window=False)
+        self.status_monitor = StatusMonitor(get_codex_status, self.app)
+        self.app.aboutToQuit.connect(self.status_monitor.close)
         self.window = PetWindow(self, "primary")
         self.windows["primary"] = self.window
         self.app.aboutToQuit.connect(self.save_all_states)
@@ -1174,6 +1213,12 @@ class DeskpetController:
         self.tray.setVisible(bool(self.settings.get("show_menu_bar_icon", True)))
         if not self.user_hidden:
             self.window.show()
+        self.status_monitor.updated.connect(self._refresh_status_windows)
+        self.status_monitor.start()
+
+    def _refresh_status_windows(self) -> None:
+        for window in tuple(self.windows.values()):
+            window.refresh_status()
 
     def save_all_states(self) -> None:
         """Persists every live copy before the app exits."""

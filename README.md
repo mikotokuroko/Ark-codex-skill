@@ -31,9 +31,9 @@ Windows 与 macOS 生成的桌宠可以相互使用。
 
 ## 下载与安装
 
-[下载 v.0.2.2 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.2/Ark-Codex-Deskpet-v.0.2.2-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
+[下载 v.0.2.3 完整源码包](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/Ark-Codex-Deskpet-v.0.2.3-source.zip) · [全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases)
 
-这是包含 skill、动画素材和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
+这是包含 skill、结城理默认动画包和构建文件的源码 ZIP，不是预编译应用。解压后，在项目根目录运行
 `./ark-codex-skill/scripts/install_macos.sh`。请先满足下方的 macOS 环境要求。
 保留解压后的项目目录，其中的 `.venv-macos` 也用于生成桌宠。
 
@@ -78,18 +78,11 @@ v.0.2.0 源码包已包含此功能；统计仅在用户明确同意后启用。
 * 使用 macOS 应用事件监听 ChatGPT/Codex，不持续轮询进程
 * 全屏检测不申请屏幕录制或辅助功能权限
 
-macOS 应用内置予愿安洁莉娜及下列桌宠，安装后可在桌宠库切换。菜单栏使用 `docs/images/icon` 提供的角色图标。
+发行包仅内置 **结城理（默认服装）**，包含 Relax、Interact、Move、Sit、Sleep 动画（模型无 Special），来源：[PRTS](https://prts.wiki/w/结城理)。
 
-| 桌宠 | 动画 | 来源 |
-|---|---|---|
-| 德克萨斯「意志」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/德克萨斯) |
-| 结城理（默认服装） | Relax、Interact、Move、Sit、Sleep（此模型无 Special） | [PRTS](https://prts.wiki/w/结城理) |
-| 丰川祥子「旋律的主人」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/丰川祥子) |
-| 若叶睦「提线的本我」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/若叶睦) |
-| 隐德来希「耀目之蓝」 | Relax、Interact、Move、Sit、Sleep、Special | [PRTS](https://prts.wiki/w/隐德来希) |
-
-新增素材位于 `ark-codex-skill/assets/deskpet-app-macos/pets/`，构建时自动打包。
-用户安装的同名桌宠仍优先于内置版本。
+默认素材位于 `ark-codex-skill/assets/deskpet-app-macos/pets/结城理/`。
+其他本地角色不纳入 Git、源码 ZIP 或应用构建；可使用 skill 另行生成、导入。
+用户安装的同名桌宠仍优先于内置版本。菜单栏使用 `docs/images/icon` 提供的角色图标。
 
 
 ## macOS 环境要求
@@ -175,7 +168,7 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 自主移动可以独立使用，也可以与 **Follow Codex activity / 跟随 Codex 活动** 同时开启。
 
 * 每次散步随机选择附近目的地、方向和速度，不会持续在屏幕两侧往返。
-* 只有自主走路时才改变位置；坐下、放松、睡眠和互动时保持原地，也不会因重力下落。
+* 只有自主走路时才横向移动；落地后坐下、放松、睡眠和互动保持原地。
 * 到达目的地或屏幕边界后立即停止位移，完成当前走路动画周期，再进入休息。
 * 休息结束后可能继续放松，或选择散步、坐下、互动、Special（若有）；原地动作随机播放 1–3 个完整周期。
 * 单击、手动动作和拖动优先于自主移动。没有实际走路帧的动画组不会移动。
@@ -183,6 +176,7 @@ Google Chrome 或 Chromium 可用于桌宠生成。
 
 | 控件 | 范围 / 默认值 | 作用 |
 | --- | --- | --- |
+| 启用重力 | 开 / 关，默认关闭 | 独立于自主移动；松手后下落到屏幕底部，关闭后停在当前位置。 |
 | 活动频率 | 25–200% / 100% | 越高越常选择新动作；越低越常继续放松。关闭自主移动时也会调整自动动作的等待时长。 |
 | 散步比例 | 0–100% / 60% | 在可用的新动作中分配给散步的比例；0% 只做原地动作，100% 仍保留休息。 |
 | 散步速度 | 5–100 px/s / 24 px/s | 每次散步在设定速度上下随机浮动 20%，独立于动作播放倍速。 |
@@ -381,7 +375,7 @@ lipo -info
 
 ```bash
 python ark-codex-skill/scripts/scaffold_deskpet.py \
-  --target my-deskpet --pet "予愿安洁莉娜"
+  --target my-deskpet --pet "结城理"
 python ark-codex-skill/scripts/setup_env.py my-deskpet
 my-deskpet/启动桌宠.bat
 ```

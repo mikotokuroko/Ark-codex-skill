@@ -93,6 +93,19 @@ class PhysicsBody:
         else:
             self.grounded = False
 
+    def fall(self, dt: float, bounds: Rect, gravity: float = 420.0) -> None:
+        """Apply vertical gravity only, with no horizontal correction or bounce."""
+        dt = max(0.0, min(float(dt), 0.1))
+        floor = max(bounds.y, bounds.bottom - self.height)
+        if self.y >= floor:
+            self.y, self.vy, self.grounded = floor, 0.0, True
+            return
+        self.vy += gravity * dt
+        self.y = min(floor, self.y + self.vy * dt)
+        self.grounded = self.y >= floor
+        if self.grounded:
+            self.vy = 0.0
+
 
 def repel_bodies(bodies: list[PhysicsBody], minimum_gap: float = 12.0,
                  bounds: Rect | None = None) -> None:

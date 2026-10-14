@@ -23,7 +23,7 @@ def test_uninstaller_requires_explicit_purge() -> None:
     assert 'if [[ "${purge_data}" == true ]]' in uninstaller
 
 
-def test_windows_template_is_still_identical_to_upstream() -> None:
+def test_windows_runtime_is_still_identical_to_upstream() -> None:
     import subprocess
 
     result = subprocess.run(
@@ -34,6 +34,8 @@ def test_windows_template_is_still_identical_to_upstream() -> None:
             "upstream/main",
             "--",
             "ark-codex-skill/assets/deskpet-app",
+            ":(exclude)ark-codex-skill/assets/deskpet-app/pets/**",
+            ":(exclude)ark-codex-skill/assets/deskpet-app/README.md",
         ],
         cwd=REPOSITORY,
         check=False,
