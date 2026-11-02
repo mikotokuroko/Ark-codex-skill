@@ -193,6 +193,11 @@ Windows 构建（Python 3.11）：
 
 **安装统计如何设置？** 可选统计默认关闭，设置方式见[统计说明](docs/adoption-metrics.md#private-opt-in-counters)。
 
+## 致谢
+
+- [AstrariaX](https://github.com/AstrariaX)：创建了原始 [Ark-codex-skill](https://github.com/AstrariaX/Ark-codex-skill) skill 和 Windows 桌宠实现，为本项目奠定基础。
+- [SteDean-Sawamura](https://github.com/SteDean-Sawamura)：在上游 [PR #3](https://github.com/AstrariaX/Ark-codex-skill/pull/3) 中贡献了多宠物、多动画组、物理引擎、自主行为、音效及交互系统，并推进模块化与跨平台适配；本项目参考并移植了其中的功能。
+
 动画来源：[PRTS Wiki](https://prts.wiki/)。角色素材归原权利方所有，详见[素材说明](docs/pet-assets.md)。
 
 <div align="center">
