@@ -7,9 +7,9 @@ import plistlib
 repository = Path(SPECPATH).parent
 macos_root = repository / "ark-codex-skill" / "assets" / "deskpet-app-macos"
 # Keep this explicit: locally installed/ignored pets must never enter releases.
-default_pet_name = "结城理"
+default_pet_name = "史尔特尔—超然序曲"
 default_pet = macos_root / "pets" / default_pet_name
-menu_icon = macos_root / "resources" / "ark-codex-tray.webp"
+menu_icon = macos_root / "resources" / "ark-codex-tray.png"
 packaging = repository / "packaging"
 
 with (packaging / "Info.plist").open("rb") as plist_file:

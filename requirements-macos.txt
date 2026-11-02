@@ -1,4 +1,5 @@
-PySide6==6.11.2
+# Qt 6.11.3 fixes macOS 27 status-menu crashes (QTBUG-147449).
+PySide6==6.11.3
 pyobjc-core==12.2.2
 pyobjc-framework-Cocoa==12.2.2
 pyobjc-framework-Quartz==12.2.2

@@ -119,6 +119,7 @@ def make_window(
     controller = StubController(pet)
     window = PetWindow(controller)
     controller.window = window
+    controller.windows = {"primary": window}
     return controller, window
 
 
@@ -191,6 +192,8 @@ def test_tray_animation_submenu_shares_manifest_actions(
     )
     controller_instance = DeskpetController.__new__(DeskpetController)
     controller_instance.window = window
+    controller_instance.windows = {"primary": window}
+    controller_instance.user_hidden = False
     controller_instance.library = controller.library
     controller_instance.settings = controller.settings
     controller_instance.tray = StubTray()
@@ -287,6 +290,8 @@ def test_tray_toggle_rebuilds_with_synchronized_checked_state(
     controller, window = make_window(make_pet, tmp_path, qapp, monkeypatch)
     controller_instance = DeskpetController.__new__(DeskpetController)
     controller_instance.window = window
+    controller_instance.windows = {"primary": window}
+    controller_instance.user_hidden = False
     controller_instance.library = controller.library
     controller_instance.settings = controller.settings
     controller_instance.tray = StubTray()

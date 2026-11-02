@@ -1,7 +1,7 @@
 name: Windows desktop pet
 on:
   push:
-    branches: ['codex/windows-parity']
+    branches: ['macos', 'codex/windows-parity']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
       - name: Shared feature tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/test_animation_policy.py tests/test_animation_ui.py tests/test_animation_groups_runtime.py tests/test_wandering.py tests/test_gravity.py tests/test_behavior_settings.py tests/test_lag_recovery.py tests/test_status_polling.py tests/test_manifest_library.py tests/test_windows_platform.py -q
+        run: python -m pytest tests/test_animation_policy.py tests/test_animation_ui.py tests/test_animation_groups_runtime.py tests/test_wandering.py tests/test_gravity.py tests/test_behavior_settings.py tests/test_pet_instances.py tests/test_lag_recovery.py tests/test_status_polling.py tests/test_manifest_library.py tests/test_windows_platform.py -q
       - name: Native Windows integration tests
         env:
           QT_QPA_PLATFORM: windows
@@ -33,7 +33,7 @@ jobs:
         shell: pwsh
         run: |
           $pets = @(Get-ChildItem 'dist/Ark Codex Deskpet/_internal/pets' -Directory)
-          if ($pets.Count -ne 1 -or $pets[0].Name -ne '结城理') { throw 'Unexpected bundled pets' }
+          if ($pets.Count -ne 1 -or $pets[0].Name -ne '史尔特尔—超然序曲') { throw 'Unexpected bundled pets' }
           Copy-Item docs/windows.md 'dist/Ark Codex Deskpet/README.md'
           Compress-Archive -Path 'dist/Ark Codex Deskpet' -DestinationPath 'dist/Ark-Codex-Deskpet-Windows-x64.zip'
           $hash = (Get-FileHash 'dist/Ark-Codex-Deskpet-Windows-x64.zip' -Algorithm SHA256).Hash.ToLower()

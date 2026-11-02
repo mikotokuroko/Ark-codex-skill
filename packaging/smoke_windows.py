@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as home:
             time.sleep(.2)
         assert process.wait(timeout=30) == 0
         settings = json.loads((Path(home) / 'Ark Codex Deskpet' / 'settings.json').read_text(encoding='utf-8'))
-        assert settings['pet'] == '结城理'
+        assert settings['pet'] == '史尔特尔—超然序曲'
         assert 'gravity_enabled' in settings
         print('Frozen Windows launch, default pack, settings persistence and IPC passed.')
     finally:

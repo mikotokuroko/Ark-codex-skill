@@ -158,7 +158,7 @@ ANIMATION_LABELS = (
     ("sleep", "睡眠/sleep"),
     ("special", "特殊/special"),
 )
-MENU_ICON_RESOURCE = Path("resources") / "ark-codex-tray.webp"
+MENU_ICON_RESOURCE = Path("resources") / "ark-codex-tray.png"
 FRAME_CACHE_BYTES = 160 * 1024 * 1024
 MENU_ICON_SIZE = 22
 MENU_ICON_DEVICE_PIXEL_RATIOS = (1, 2, 3)
@@ -444,6 +444,7 @@ class PetWindow(QWidget):
         super().__init__()
         self.controller = controller
         self.instance_key = instance_key
+        self.user_hidden = bool(controller.settings.get("instance_states", {}).get(instance_key, {}).get("hidden", False))
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
@@ -1031,7 +1032,9 @@ class PetWindow(QWidget):
         click_through.setChecked(self.click_through)
         click_through.triggered.connect(self.toggle_click_through)
         menu.addSeparator()
-        menu.addAction("隐藏桌宠", self.controller.hide_pet)
+        menu.addAction("隐藏这只桌宠", lambda: self.controller.set_instance_hidden(self, True))
+        remove = menu.addAction("移除这只桌宠", lambda: self.controller.remove_pet_instance(self))
+        remove.setEnabled(len(self.controller.windows) > 1)
         menu.addAction("退出", self.controller.quit)
         return menu
 
@@ -1066,7 +1069,7 @@ class PetWindow(QWidget):
 
     def check_fullscreen(self) -> None:
         """Hides only for confirmed fullscreen coverage and restores safely."""
-        if self.controller.user_hidden:
+        if self.controller.user_hidden or self.user_hidden:
             return
         if not bool(self.settings.get("auto_hide_fullscreen")):
             if self.fullscreen_hidden:
@@ -1106,17 +1109,19 @@ class PetWindow(QWidget):
         self.settings.setdefault("instance_states", {})[self.instance_key] = {
             "pet": self.pet.name,
             "state_key": state_key,
-            "visible": self.isVisible(),
+            "visible": not self.user_hidden,
+            "hidden": self.user_hidden,
         }
-        self.settings.update(
-            {
-                "pet": self.pet.name,
-                "scale": self.scale,
-                "speed": self.speed,
-                "pos_x": self.x(),
-                "pos_y": self.y(),
-            }
-        )
+        if self.instance_key == "primary":
+            self.settings.update(
+                {
+                    "pet": self.pet.name,
+                    "scale": self.scale,
+                    "speed": self.speed,
+                    "pos_x": self.x(),
+                    "pos_y": self.y(),
+                }
+            )
         save_settings(settings_path(), self.settings)
 
     def _format_elapsed(self, seconds: int) -> str:
@@ -1221,7 +1226,7 @@ class DeskpetController:
             if pet_name in self.library:
                 self.add_pet_instance(str(pet_name), instance_id=str(instance_id))
         self.tray.setVisible(bool(self.settings.get("show_menu_bar_icon", True)))
-        if not self.user_hidden:
+        if not self.user_hidden and not self.window.user_hidden:
             self.window.show()
         self.status_monitor.updated.connect(self._refresh_status_windows)
         self.status_monitor.start()
@@ -1249,29 +1254,59 @@ class DeskpetController:
         if instance_id is None:
             window.move(window.x() + 32 * len(self.windows), window.y())
         self.windows[key] = window
-        if not self.user_hidden:
+        if not self.user_hidden and not window.user_hidden:
             window.show()
+        window.save_pet_state()
+        self._build_tray_menu()
         return window
 
-    def remove_pet_instance(self, window: PetWindow) -> None:
-        """Closes a secondary copy while keeping the tray and primary alive."""
-        if window is self.window or len(self.windows) <= 1:
-            return
+    def set_instance_hidden(self, window: PetWindow, hidden: bool) -> None:
+        """Hides or restores one copy without affecting its companions."""
+        if not hidden and self.user_hidden:
+            # Preserve the other copies' hidden state when restoring just one.
+            for other in self.windows.values():
+                other.user_hidden = True
+                other.save_pet_state()
+            self.user_hidden = False
+            self.settings["user_hidden"] = False
+        window.user_hidden = hidden
+        window.fullscreen_hidden = False
+        if hidden:
+            window.hide()
+        else:
+            window.set_click_through(False)
+            window.show()
+            window.raise_()
         window.save_pet_state()
-        for key, candidate in tuple(self.windows.items()):
-            if candidate is window:
-                self.windows.pop(key, None)
-                self.settings.get("instance_states", {}).pop(key, None)
-                save_settings(settings_path(), self.settings)
-                break
+        self._build_tray_menu()
+
+    def remove_pet_instance(self, window: PetWindow) -> None:
+        """Removes a copy; another copy becomes primary when necessary."""
+        if len(self.windows) <= 1 or window not in self.windows.values():
+            return
+        self.windows.pop(window.instance_key)
+        self.settings.get("instance_states", {}).pop(window.instance_key, None)
+        if window is self.window:
+            self.window = next(iter(self.windows.values()))
+            old_key = self.window.instance_key
+            self.windows.pop(old_key)
+            self.settings.get("instance_states", {}).pop(old_key, None)
+            self.window.instance_key = "primary"
+            self.windows["primary"] = self.window
+            self.active_pet_name = self.window.pet.name
+            self.window.save_pet_state()
+        save_settings(settings_path(), self.settings)
         window.close()
         window.deleteLater()
+        self._build_tray_menu()
 
     def refresh_library(self, create_window: bool = True) -> None:
         """Reloads bundled and user pets, honoring user overrides."""
         self.library = merge_pet_libraries(
             bundled_pets_dir(), user_pets_dir()
         )
+        for name in self.settings.get("excluded_pets", []):
+            self.library.pop(name, None)
         if not self.library:
             raise ManifestError("桌宠库为空")
         requested = self.settings.get("pet")
@@ -1287,8 +1322,15 @@ class DeskpetController:
 
     def _build_tray_menu(self) -> None:
         menu = QMenu()
-        menu.addAction("显示桌宠", self.show_pet)
-        menu.addAction("隐藏桌宠", self.hide_pet)
+        menu.addAction("显示全部桌宠", self.show_pet)
+        menu.addAction("隐藏全部桌宠", self.hide_pet)
+        instances = menu.addMenu("管理桌面上的桌宠")
+        for index, window in enumerate(self.windows.values(), 1):
+            hidden = self.user_hidden or window.user_hidden
+            copy_menu = instances.addMenu(f"{index}. {window.pet.name}" + ("（已隐藏）" if hidden else ""))
+            copy_menu.addAction("显示" if hidden else "隐藏", lambda checked=False, window=window, hidden=hidden: self.set_instance_hidden(window, not hidden))
+            remove = copy_menu.addAction("移除", lambda checked=False, window=window: self.remove_pet_instance(window))
+            remove.setEnabled(len(self.windows) > 1)
         library_menu = menu.addMenu("桌宠库")
         group = QActionGroup(library_menu)
         group.setExclusive(True)
@@ -1344,9 +1386,13 @@ class DeskpetController:
         self.settings["user_hidden"] = False
         save_settings(settings_path(), self.settings)
         for window in self.windows.values():
+            window.user_hidden = False
+            window.fullscreen_hidden = False
             window.set_click_through(False)
             window.show()
             window.raise_()
+        if hasattr(self, "tray"):
+            self._build_tray_menu()
 
     def hide_pet(self) -> None:
         """Hides the pet while leaving the status-menu icon active."""
@@ -1355,6 +1401,7 @@ class DeskpetController:
         save_settings(settings_path(), self.settings)
         for window in self.windows.values():
             window.hide()
+        self._build_tray_menu()
 
     def select_pet(self, name: str, window: PetWindow | None = None) -> None:
         """Switches pets and rebuilds checked menu state."""

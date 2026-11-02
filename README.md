@@ -24,19 +24,19 @@
 - **独立重力开关**：开启后松手下落，关闭后停在当前位置。
 - **跟随 Codex 活动**：工作时移动、互动，空闲时放松，长时间空闲后睡眠。
 - **自由调整外观**：缩放、翻转、透明度、迷你模式、双语字幕与自定义托盘图标。
-- **多只桌宠**：切换角色、动画组和可用动作，为每只副本保存位置与大小。
+- **多只桌宠**：切换角色、动画组和可用动作，为每只副本保存位置、大小和隐藏状态。
 - **桌面交互**：拖动、锁定、点击穿透、全屏隐藏、音效与语音气泡。
 
-发行包内置 **结城理**。其他角色可通过 skill 生成或导入。
+发行包内置 **史尔特尔—超然序曲**。其他角色可通过 skill 生成或导入。
 
 ## 下载与安装
 
 | 平台 | 下载 | 安装方式 |
 |---|---|---|
-| Windows 10/11 x64 | [便携 ZIP · 130 MiB](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/Ark-Codex-Deskpet-Windows-x64.zip) | 解压整个目录，运行 `Ark Codex Deskpet.exe`。保留旁边的 `_internal` 文件夹。 |
-| macOS 13+ Apple silicon | [源码 ZIP · 77.4 MiB](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/Ark-Codex-Deskpet-v.0.2.3-source.zip) | 解压后按下方步骤构建并安装。 |
+| Windows 10/11 x64 | [便携 ZIP](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/Ark-Codex-Deskpet-Windows-x64.zip) | 解压整个目录，运行 `Ark Codex Deskpet.exe`。保留旁边的 `_internal` 文件夹。 |
+| macOS 13+ Apple silicon | [源码 ZIP](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/Ark-Codex-Deskpet-v.0.2.4-source.zip) | 解压后按下方步骤构建并安装。 |
 
-[全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases) · [Windows 校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/SHA256SUMS-Windows.txt) · [源码校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.3/SHA256SUMS.txt)
+[全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases) · [Windows 校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/SHA256SUMS-Windows.txt) · [源码校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/SHA256SUMS.txt)
 
 Windows 便携版可直接运行。生成新桌宠或自行构建时，请使用[最新源码](https://github.com/mikotokuroko/Ark-codex-skill/archive/refs/heads/macos.zip)；Windows 环境配置见 [Windows 使用说明](docs/windows.md)。
 
@@ -101,6 +101,8 @@ git pull --ff-only origin macos
 菜单中的 **Follow Codex activity / 跟随 Codex 活动** 可以与自主移动同时开启。桌宠会根据本机 Codex 任务切换活动状态，空闲五分钟后睡眠，任务开始时唤醒。
 
 **外观与其他** 标签页提供动作倍速、字幕、全屏隐藏、音效、托盘图标和随 ChatGPT/Codex 启动选项。字幕语言可通过 **Language → English / 简体中文** 切换。
+
+右键一只桌宠可选择 **隐藏这只桌宠** 或 **移除这只桌宠**。菜单栏 / 系统托盘的 **管理桌面上的桌宠** 可单独显示、隐藏或移除副本；最后一只可隐藏。
 
 ## 生成新桌宠
 
@@ -183,7 +185,7 @@ Windows 构建（Python 3.11）：
 
 ## 常见问题
 
-**桌宠不见了，或误开点击穿透？** 通过菜单栏 / 系统托盘选择“显示桌宠”，也可以重新打开应用来恢复显示和鼠标操作。
+**桌宠不见了，或误开点击穿透？** 通过菜单栏 / 系统托盘选择“显示全部桌宠”，也可以重新打开应用来恢复显示和鼠标操作。
 
 **Mac 上没有 Dock 图标？** 桌宠通过菜单栏图标管理。右键 → 设置可更换或隐藏该图标。
 

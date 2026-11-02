@@ -15,8 +15,8 @@ def main():
     parser.add_argument("--target", required=True)
     parser.add_argument(
         "--pet",
-        default="结城理",
-        help="initial pet name (default: bundled 结城理)",
+        default="史尔特尔—超然序曲",
+        help="initial pet name (default: bundled 史尔特尔—超然序曲)",
     )
     args = parser.parse_args()
 
@@ -31,8 +31,8 @@ def main():
         else:
             shutil.copy2(item, dest)
     (target / "pets").mkdir(exist_ok=True)
-    default_pack = SKILL_DIR / "assets" / "deskpet-app-macos" / "pets" / "结城理"
-    shutil.copytree(default_pack, target / "pets" / "结城理", dirs_exist_ok=True)
+    default_pack = SKILL_DIR / "assets" / "deskpet-app-macos" / "pets" / "史尔特尔—超然序曲"
+    shutil.copytree(default_pack, target / "pets" / "史尔特尔—超然序曲", dirs_exist_ok=True)
 
     settings = {
         "speed": 1.0,
@@ -45,7 +45,7 @@ def main():
         "scale": 1.0,
         "pos_x": None,
         "pos_y": None,
-        "pet": args.pet or "结城理",
+        "pet": args.pet or "史尔特尔—超然序曲",
         "pet_states": {},
         "autostart_with_codex": False,
     }

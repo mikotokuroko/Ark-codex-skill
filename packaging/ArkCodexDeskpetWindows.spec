@@ -3,10 +3,10 @@
 from pathlib import Path
 repository = Path(SPECPATH).parent
 runtime = repository / "ark-codex-skill" / "assets" / "deskpet-app-macos"
-pet = runtime / "pets" / "结城理"
+pet = runtime / "pets" / "史尔特尔—超然序曲"
 a = Analysis([str(runtime / "main.py")], pathex=[str(runtime)],
-             datas=[(str(pet), "pets/结城理"),
-                    (str(runtime / "resources" / "ark-codex-tray.webp"), "resources")],
+             datas=[(str(pet), "pets/史尔特尔—超然序曲"),
+                    (str(runtime / "resources" / "ark-codex-tray.png"), "resources")],
              hiddenimports=["psutil", "PySide6.QtNetwork", "PySide6.QtMultimedia"],
              excludes=["AppKit", "Foundation", "Quartz", "objc", "pytest", "pytestqt", "playwright"],
              binaries=[], hookspath=[], runtime_hooks=[], noarchive=False)

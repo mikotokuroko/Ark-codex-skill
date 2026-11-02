@@ -3,7 +3,7 @@
 APP_NAME = "Ark Codex Deskpet"
 BUNDLE_ID = "com.astrariax.arkcodexdeskpet"
 WATCHER_ID = "com.astrariax.arkcodexdeskpet.watcher"
-DEFAULT_PET = "结城理"
+DEFAULT_PET = "史尔特尔—超然序曲"
 REQUIRED_STATES = ("idle", "interact", "move", "sit", "sleep")
 IPC_COMMANDS = ("show", "hide", "shutdown", "refresh-library")
 IPC_SERVER_NAME = "com.astrariax.arkcodexdeskpet.command"

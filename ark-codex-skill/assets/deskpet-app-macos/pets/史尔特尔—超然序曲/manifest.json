@@ -1,0 +1,72 @@
+{
+  "fps": 20,
+  "size": 1000,
+  "states": {
+    "idle": {
+      "duration": 3350,
+      "count": 67,
+      "bbox": [
+        355,
+        381,
+        570,
+        716
+      ],
+      "source": "PRTS 史尔特尔—超然序曲 超然序曲 基建 Relax"
+    },
+    "interact": {
+      "duration": 4350,
+      "count": 87,
+      "bbox": [
+        355,
+        381,
+        583,
+        716
+      ],
+      "source": "PRTS 史尔特尔—超然序曲 超然序曲 基建 Interact"
+    },
+    "move": {
+      "duration": 1350,
+      "count": 27,
+      "bbox": [
+        348,
+        383,
+        570,
+        716
+      ],
+      "source": "PRTS 史尔特尔—超然序曲 超然序曲 基建 Move"
+    },
+    "sit": {
+      "duration": 3350,
+      "count": 67,
+      "bbox": [
+        358,
+        480,
+        564,
+        813
+      ],
+      "source": "PRTS 史尔特尔—超然序曲 超然序曲 基建 Sit"
+    },
+    "sleep": {
+      "duration": 8000,
+      "count": 160,
+      "bbox": [
+        329,
+        473,
+        590,
+        720
+      ],
+      "source": "PRTS 史尔特尔—超然序曲 超然序曲 基建 Sleep"
+    },
+    "special": {
+      "duration": 11700,
+      "count": 234,
+      "bbox": [
+        112,
+        160,
+        793,
+        738
+      ],
+      "source": "PRTS 史尔特尔—超然序曲 超然序曲 基建 Special"
+    }
+  }
+}

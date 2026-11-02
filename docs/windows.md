@@ -4,7 +4,7 @@ Requires Windows 10/11 x64. Extract the entire ZIP, then double-click **Ark Code
 
 The Windows build uses the same application and animation code as macOS: random walking and pauses, independent gravity, activity and walking settings, Codex activity following, animation groups and Special, multiple pet copies, scaling, mirroring, opacity, locking, click-through recovery, subtitles, sound/bubbles, pet library and acquisition.
 
-Only **结城理** is bundled. Additional packs go in `%LOCALAPPDATA%\Ark Codex Deskpet\Pets`. Settings, cache and logs also live under `%LOCALAPPDATA%\Ark Codex Deskpet`; replacing the app folder keeps them intact.
+Only **史尔特尔—超然序曲** is bundled. Additional packs go in `%LOCALAPPDATA%\Ark Codex Deskpet\Pets`. Settings, cache and logs also live under `%LOCALAPPDATA%\Ark Codex Deskpet`; replacing the app folder keeps them intact.
 
 Right-click the pet or use its notification-area icon for settings and the library. **Show Pet** restores mouse input after click-through is enabled. The tray-icon setting controls the Windows notification-area icon.
 
