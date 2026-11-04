@@ -48,7 +48,8 @@ def launch_agent_definition(
         "ProgramArguments": [str(watcher_executable)],
         "RunAtLoad": True,
         "KeepAlive": True,
-        "ProcessType": "Background",
+        # The GUI child inherits this policy; Background throttles its 20-fps timers.
+        "ProcessType": "Interactive",
         "StandardOutPath": str(logs / "watcher.log"),
         "StandardErrorPath": str(logs / "watcher-error.log"),
     }

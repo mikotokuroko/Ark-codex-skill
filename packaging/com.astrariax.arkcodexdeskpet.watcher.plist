@@ -13,7 +13,7 @@
   <key>KeepAlive</key>
   <true/>
   <key>ProcessType</key>
-  <string>Background</string>
+  <string>Interactive</string>
   <key>StandardOutPath</key>
   <string>__WATCHER_LOG__</string>
   <key>StandardErrorPath</key>
