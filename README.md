@@ -34,9 +34,9 @@
 | 平台 | 下载 | 安装方式 |
 |---|---|---|
 | Windows 10/11 x64 | [便携 ZIP](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/Ark-Codex-Deskpet-Windows-x64.zip) | 解压整个目录，运行 `Ark Codex Deskpet.exe`。保留旁边的 `_internal` 文件夹。 |
-| macOS 13+ Apple silicon | [源码 ZIP](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/Ark-Codex-Deskpet-v.0.2.4-source.zip) | 解压后按下方步骤构建并安装。 |
+| macOS 13+ Apple silicon | [应用 ZIP](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.5/Ark-Codex-Deskpet-macOS-arm64.zip) · [源码 ZIP](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.5/Ark-Codex-Deskpet-v.0.2.5-source.zip) | 解压应用并放入 Applications；也可按下方步骤从源码构建。 |
 
-[全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases) · [Windows 校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/SHA256SUMS-Windows.txt) · [源码校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/SHA256SUMS.txt)
+[全部版本](https://github.com/mikotokuroko/Ark-codex-skill/releases) · [Windows 校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.4/SHA256SUMS-Windows.txt) · [源码校验文件](https://github.com/mikotokuroko/Ark-codex-skill/releases/download/v.0.2.5/SHA256SUMS.txt)
 
 Windows 便携版可直接运行。生成新桌宠或自行构建时，请使用[最新源码](https://github.com/mikotokuroko/Ark-codex-skill/archive/refs/heads/macos.zip)；Windows 环境配置见 [Windows 使用说明](docs/windows.md)。
 

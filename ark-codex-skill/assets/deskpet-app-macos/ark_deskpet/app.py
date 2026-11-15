@@ -1376,7 +1376,9 @@ class DeskpetController:
         self.tray.setContextMenu(menu)
 
     def _tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason == QSystemTrayIcon.Trigger:
+        # macOS opens the native context menu on a primary click. Calling
+        # show_pet here replaces that menu while it is being tracked.
+        if sys.platform != "darwin" and reason == QSystemTrayIcon.Trigger:
             self.show_pet()
 
     def show_pet(self) -> None:

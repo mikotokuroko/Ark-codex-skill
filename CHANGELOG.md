@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5
+
+- Keep the macOS tray menu stable when clicking its icon, so menu actions are not disrupted by replacing the open menu.
+- Add regression coverage for menu identity, Quit dispatch, and unchanged Windows tray activation.
+- Include the existing macOS automatic-launch scheduling fix from November 4.
+
 ## 0.2.3
 
 - Move Codex status scans off the animation thread and share results across pet copies.
